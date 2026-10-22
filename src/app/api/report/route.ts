@@ -1,0 +1,33 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getReasoner } from "@/lib/providers";
+import { handler, readJson } from "@/lib/server/route";
+import { ScenarioSchema } from "@/lib/scenario/schema";
+import { ClientStateSchema, TurnSchema } from "@/lib/sim/types";
+import { generateCoachReport } from "@/lib/coach/generate";
+import { once } from "@/lib/server/idempotency";
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+const Body = z.object({
+  sessionId: z.string().regex(/^[a-zA-Z0-9_-]{8,64}$/),
+  scenario: ScenarioSchema,
+  turns: z.array(TurnSchema).min(2).max(50),
+  clientState: ClientStateSchema,
+});
+
+export const POST = handler(
+  "report",
+  async (req) => {
+    const body = Body.parse(await readJson(req));
+    const reasoner = getReasoner();
+    // A trailing client line (e.g. its goodbye) is not needed for scoring.
+    const turns = body.turns.at(-1)?.role === "client" ? body.turns.slice(0, -1) : body.turns;
+    const { value } = once(`report:${body.sessionId}:${turns.length}`, () =>
+      generateCoachReport(reasoner, body.scenario, turns, body.clientState),
+    );
+    return NextResponse.json(await value);
+  },
+  { weight: 3 },
+);
