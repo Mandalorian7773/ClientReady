@@ -1,3 +1,5 @@
+import { ringMarkLines } from "@/lib/brand/ring-mark";
+
 /**
  * Shared artwork for the Open Graph and Twitter preview images (1200x630),
  * in the Optikka style: paper, ink, one orange word, a hatched ring.
@@ -37,6 +39,18 @@ export async function ogFonts() {
   ];
 }
 
+/** The brand mark (src/lib/brand/ring-mark.ts) for the wordmark row. */
+function OgMark() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 64 64">
+      {ringMarkLines(64).map((l, i) => (
+        <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.color} strokeOpacity={l.opacity} strokeWidth={2.6} strokeLinecap="round" />
+      ))}
+      <circle cx="32" cy="32" r="6" fill={ACCENT} />
+    </svg>
+  );
+}
+
 /** A hatched ribbon ring, echoing the voice ring on the call screen. */
 function RingMotif() {
   const lines = 120;
@@ -71,7 +85,7 @@ export function OgArt() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: PAPER, color: INK, fontFamily: "Inter Tight" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "36px 56px" }}>
-        <div style={{ width: 14, height: 14, borderRadius: 7, background: ACCENT }} />
+        <OgMark />
         <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: "0.22em" }}>CLIENTREADY</div>
       </div>
       <HRule />
