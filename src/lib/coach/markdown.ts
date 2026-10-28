@@ -39,6 +39,15 @@ export function reportToMarkdown(report: CoachReport, scenario: Scenario, turns:
       lines.push(`- **Exercise:** ${i.exercise}`);
     });
   }
+  if (report.deliveryNotes.length) {
+    lines.push("", `## Delivery`);
+    for (const n of report.deliveryNotes) lines.push(`- ${n}`);
+  }
+  if (report.proposalSteps.length) {
+    lines.push("", `## How to put up a proposal`);
+    report.proposalSteps.forEach((p, n) => lines.push(`${n + 1}. ${p}`));
+  }
+  if (report.nextDrill) lines.push("", `## Next session`, report.nextDrill);
   if (report.plan.length) {
     lines.push("", `## Plan for next session`);
     report.plan.forEach((p, n) => lines.push(`${n + 1}. **${p.title}**: ${p.why} Exercise: ${p.exercise} Success: ${p.successMetric}`));
@@ -49,7 +58,7 @@ export function reportToMarkdown(report: CoachReport, scenario: Scenario, turns:
   }
   lines.push("", `## Transcript`);
   for (const t of turns) {
-    lines.push(`- [${t.index}] **${t.role === "client" ? scenario.client.name : "You"}**${t.source === "typed" ? " (typed)" : ""}: ${t.text}`);
+    lines.push(`- [${t.index}] **${t.role === "client" ? scenario.client.name : "You"}**${t.source === "typed" && t.role === "learner" ? " (typed)" : ""}${t.interrupted ? " (interrupted)" : ""}: ${t.text}`);
     if (t.englishText) lines.push(`  - English rendering: ${t.englishText}`);
   }
   return lines.join("\n");

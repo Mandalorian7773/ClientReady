@@ -13,34 +13,38 @@ Built for the Great Indian AI Internship Challenge 2026 on **Gnani Prisma v2.5**
 | Capability | Status |
 |---|---|
 | Landing page, guided scenario builder, 5 ready-made scenarios, pre-call briefing with mic check | ✅ |
-| Voice loop: browser mic → 16 kHz WAV → **Gnani Prisma** → client reasoning → **Gnani Timbre** → playback, with replay | ✅ verified live (see *Verification status*) |
+| Hands-free voice call: mic → in-browser end-of-speech detection → **Gnani Prisma** → client reasoning → **Gnani Timbre** streamed over SSE, with barge-in, mute, captions and a 10-minute cap | ✅ server pieces verified live; mic capture needs a real browser (see *Verification status*) |
+| Spoken coach debrief before the written report (Timbre coach voice, quote-checked) | ✅ verified live with Gemini + Timbre |
+| Optikka-style UI: warm paper, Inter Tight, dotted rules, a voice ring that reacts to whoever is speaking | ✅ |
+| Scripted sample call (`/practice/session?sample`) for demos without a mic or keys, labelled as a sample | ✅ |
 | Adaptive client: persistent persona, hidden concerns revealed gradually, interest tracking, natural endings, turn limits | ✅ with an LLM provider; a simpler rule-based demo engine without one |
 | Multilingual: speak in 10 Indian languages or Hinglish, English rendering for the client, coaching in your language | ✅ (needs an LLM provider for translation) |
 | Coaching report: 9-category weighted scorecard, verified quotes, better answers, exercises, 3-step plan, language bridge, measured delivery | ✅ |
 | "Listen" to a better answer through Timbre | ✅ |
 | Session history with progress chart, per-session and bulk delete, Markdown / print export | ✅ (stored in the browser) |
-| Typed-answer fallback (clearly marked as typed, never as Prisma output) | ✅ |
+| Typed-answer fallback when the mic or Prisma is unavailable (clearly marked as typed, never as Prisma output) | ✅ |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph Browser
-    MIC[Mic · MediaRecorder] --> CONV[Decode + resample<br/>16 kHz mono PCM WAV]
-    UI[Studio UI] --> AUDIO[Audio playback + replay]
+    MIC[Mic · AudioWorklet<br/>16 kHz PCM frames] --> VAD[Utterance segmenter<br/>end-of-speech · barge-in]
+    VAD --> CONV[16 kHz mono WAV]
+    UI[Call board + voice ring] --> AUDIO[Streaming PCM player]
     LS[(localStorage<br/>sessions, no audio)]
   end
   subgraph "Next.js server (API routes)"
     STT[/api/stt/] --> PRISMA[GnaniPrismaSTT]
     TURN[/api/turn/] --> ENGINE[Client simulator<br/>persona · state · prompts]
     REPORT[/api/report/] --> COACH[Coach<br/>rubric · verification · scoring]
-    TTS[/api/tts/] --> TIMBRE[GnaniTimbreTTS]
+    TTS[/api/tts · /api/tts/stream/] --> TIMBRE[GnaniTimbreTTS]
     ENGINE --> R{{ReasoningProvider}}
     COACH --> R
   end
   CONV --> STT
   PRISMA -->|POST /stt/v3| G1[(api.vachana.ai)]
-  TIMBRE -->|POST /api/v1/tts/inference| G1
+  TIMBRE -->|POST /api/v1/tts/inference · /api/v1/tts/sse| G1
   R --> GM[Google Gemini]
   R --> A[Anthropic Claude]
   R --> O[OpenAI-compatible server<br/>e.g. self-hosted Gnani Evon v3.3]
@@ -73,6 +77,26 @@ The provider is selected automatically: `ANTHROPIC_API_KEY` → Claude; otherwis
 - **OpenAI-compatible** uses JSON mode plus the JSON Schema in the prompt, then tolerant parsing and Zod validation.
 - **Demo engine** is deterministic keyword rules. It's labelled "Demo engine (rule-based, not an LLM)" in the studio, the report and history. It exists so the full flow and the real Gnani voice pipeline can be shown without an LLM key. It cannot translate non-English speech.
 
+## The call experience
+
+The call screen follows the "Optikka" design brief: one board split by dotted rules into three columns and three rows, small uppercase labels, a large display line, and one orange phrase per screen.
+
+1. **Ready.** "Meet Dr. Mitchell", the engines that are live, and Start the call. A user gesture starts the AudioContext and asks for the mic.
+2. **Client opens.** `/api/turn` with an empty history. The reply is streamed from Timbre (`/api/tts/stream`, raw 16-bit PCM at 24 kHz over SSE) into a player whose level drives the ring.
+3. **You answer, hands-free.** An AudioWorklet cuts the mic into 32 ms 16 kHz frames. `UtteranceSegmenter` tracks an adaptive noise floor and ends a segment after **1.1 s of quiet** (enough for a thinking pause). It keeps 320 ms of pre-roll and drops clicks under 0.3 s. Each segment goes to Prisma REST as WAV (≈0.3 s). Your answer is committed once you are quiet and every segment is transcribed. Long answers are cut at 28 s and transcribed in parts.
+4. **No transcript during the call.** Captions are optional. They switch on automatically when you type or when Timbre is unavailable.
+5. **Barge-in.** While the client talks, speaking clearly louder than the room for 350 ms stops the client and hands you the turn. The line is marked "interrupted" in the transcript.
+6. **The call ends** when you press End call, when the client decides, declines or runs out of patience, or after 10 minutes. An answer you were still giving is transcribed and kept.
+7. **Debrief.** `/api/report` returns the scorecard plus a spoken script. The coach voice (Trupti by default, or the coaching language's voice) reads it, starting with *"The conversation between you and the client has now ended. Here are the areas where you could have done better."* Each mistake segment follows *"In this part you said, '…'. Here's how to …"*. Segments whose quote can't be found in your transcript are dropped. Then the written report opens, and you can replay the debrief from it.
+
+**Delivery evidence.** Prisma returns text only, so the coach may comment on tone only with measured evidence: pace, fillers and hedges (from the transcript), plus answer delay, mid-answer pauses, loudness variation and talk-time share (from the microphone during a live call). The report shows those numbers.
+
+**Differences from the prototype (`clientready-call`)**
+
+- *Realtime STT socket → in-browser segmentation + Prisma REST.* The prototype proxied Prisma's realtime WebSocket. Next.js route handlers can't upgrade WebSockets, and serverless hosts such as Vercel don't support them, so ClientReady detects end-of-speech in the browser instead. Prisma REST measured ≈0.3 s per segment live, so the turn-taking feels the same, and the app stays deployable anywhere.
+- *Scoring.* The prototype scored six areas from 1 to 5. ClientReady keeps its research-anchored 9-category, 0–100 scorecard, which the history chart depends on. It adds the prototype's moments, delivery notes, proposal steps, next drill and spoken debrief.
+- *LLM adapter.* The prototype's raw Anthropic/OpenAI adapter is replaced by the existing provider layer: Gemini, Claude or OpenAI-compatible, with schema-validated output.
+
 ## Run it locally
 
 Requirements: Node 20+ (tested on Node 22).
@@ -102,7 +126,7 @@ See [`.env.example`](.env.example). All are server-side only. `/api/status` expo
 ## Tests
 
 ```bash
-npm test                    # 120+ unit tests, all providers mocked, no network
+npm test                    # 159 unit tests, all providers mocked, no network
 npm run test:integration    # REAL Gnani calls: Timbre→Prisma round trip in English, Hindi, Hinglish (skipped without GNANI_API_KEY)
 npm run smoke               # full pipeline: Timbre learner line → Prisma → reasoning → Timbre reply; writes WAVs to tmp/smoke/ (reasoning-only check if GNANI_API_KEY is missing)
 npm run typecheck && npm run lint && npm run build
@@ -120,7 +144,9 @@ Live results from 22 Oct 2026 (Gnani + Gemini keys):
 - ✅ `npm run test:integration`: Timbre → Prisma round trips in **English, Hindi (Devanagari) and Hinglish** are transcribed correctly, and an invalid key returns a clean auth error.
 - ✅ Through the running app's API routes: Gemini opening and replies are context-aware (they raise hidden concerns such as AI accuracy and ROI), Timbre `/api/tts` returns WAV with voice Kaveri, and the Gemini coaching report comes back in ~25–33 s with every quote verified (0 dropped), specific issues and better answers.
 - ✅ A real browser session with microphone input completed: `/api/stt` (Prisma) → `/api/turn` → `/api/tts` → `/api/report`.
-- ✅ 137 unit tests, typecheck, lint and production build pass.
+- ✅ 159 unit tests, typecheck, lint and production build pass.
+- ✅ Call screen redesign (28 Oct), verified live in the browser with Gemini + Timbre: the client opening and two Gemini replies, streamed Timbre audio (`/api/tts/stream`: start → 125 chunks → complete, 24 kHz PCM, coach voice Trupti), the spoken debrief (5 segments, exact opening line, quotes verified) and the redesigned report. The scripted sample call was also played through to its report.
+- ⚠️ Hands-free microphone capture (AudioWorklet → segmenter → Prisma) wasn't exercised in automation, because the test browser blocks the mic. The segmenter, barge-in and timing logic are unit-tested with synthetic audio, and Prisma REST was verified live. Try one real call with headphones before recording your demo.
 - Tuning found during live testing: Gemini client turns took 7–12 s at the model's default thinking. `thinkingLevel: LOW` brought them to ~3.5 s with no visible drop in quality. Gemini once stalled for 45 s on an opening that normally takes 3 s, so client turns now time out at 20 s and retry once.
 
 ## Deploy (Vercel)
@@ -144,15 +170,22 @@ Any Node host works: `npm run build && npm start`. The microphone requires **HTT
 
 ## 60-second demo script
 
-1. **(0–8 s)** Landing page → "Start practising" → pick **AI receptionist for a US dental clinic**.
-2. **(8–15 s)** Briefing: point at the live engine panel (Prisma ✓, Timbre ✓) → mic check → "Start the call". Dr. Mitchell opens in a Timbre voice.
-3. **(15–30 s)** Answer weakly on purpose: *"Our AI receptionist answers calls 24/7 and integrates with your calendar."* The client pushes back: *"That's a list of features. How do I know it brings in patients?"*
-4. **(30–42 s)** Answer better, in Hinglish if you like. Show the Prisma transcript and the "Client heard (English rendering)" line. Propose a two-week pilot. The client agrees.
-5. **(42–60 s)** End & get coaching: overall score, a verified quote of the weak answer, the stronger answer for *this* clinic and price, click **Listen (Gnani Timbre)**, and the 3-step plan.
+Use headphones, so the client's voice doesn't trigger barge-in.
+
+1. **(0–8 s)** Landing page → "Start practising" → **AI receptionist for a US dental clinic** → briefing (engine panel: Prisma, Timbre and Gemini all live) → "Go to the call".
+2. **(8–15 s)** "Start the call". The ring turns grey and moves with Dr. Mitchell's Timbre voice as she explains the missed calls.
+3. **(15–30 s)** Answer weakly on purpose: *"Our AI receptionist answers calls 24/7 and integrates with your calendar."* Stop talking; after a beat she pushes back: *"That's a list of features. How do I know it brings in patients?"*
+4. **(30–42 s)** Talk over her to show barge-in, then answer better, in Hinglish if you like. Propose a two-week pilot. End the call.
+5. **(42–60 s)** The coach's voice: *"In this part you said, '…'. Here's how to…"*. Skip to the report: the score, the verified quote, the stronger line for this clinic and price, and **Listen (Gnani Timbre)**.
+
+No mic or keys? `/practice/session?sample` plays a scripted, clearly labelled sample of the same flow.
 
 ## Known limitations
 
-- Turn-by-turn audio, not full-duplex streaming. Expect a few seconds of latency per turn (Prisma + LLM + Timbre). Timbre SSE and WebSocket streaming are documented and would be the next latency improvement.
+- End-of-speech detection is an energy-based heuristic. A very noisy room can delay the end of a turn, and loud speakers without headphones can trigger barge-in. Raise `multiplier` in `BargeInDetector` if that happens.
+- Latency per turn is roughly 1.1 s of silence + Prisma (≈0.3 s) + Gemini (≈3.5 s) + the first Timbre audio. Prisma's realtime WebSocket would trim a little more, but needs a host that supports WebSockets.
+- The Gemini coaching report with the spoken script takes 30–60 s. Set `GEMINI_COACH_THINKING_LEVEL=LOW` to trade some depth for speed.
+- The voice ring and the streaming player need Web Audio (AudioWorklet): current Chrome, Edge, Safari or Firefox.
 - Rate limiting and idempotency are per server instance (in-memory).
 - History is per browser. There are no accounts.
 - The demo engine is intentionally simple and can't translate. Use an LLM provider for real practice.
@@ -166,7 +199,9 @@ Any Node host works: `npm run build && npm start`. The microphone requires **HTT
 | "Gnani … refused access" (403) | Check the key, organisation status and remaining credits at app.gnani.ai/voice. |
 | Mic blocked | Allow the microphone in site settings. It must be HTTPS or localhost. You can always type instead. |
 | "We couldn't hear anything" | The mic is muted or too quiet. The clip is rejected before any credits are spent. |
-| No client audio | Autoplay may be blocked; use the Replay button. If Timbre isn't configured, replies are text only. |
+| No client audio | Turn on Captions. If Timbre isn't configured, captions turn on automatically. |
+| The client keeps getting interrupted | Use headphones. The client's voice from your speakers is being heard as you talking. |
+| Your turn never ends | The room is noisy: pause a little longer, or use Mute and the typed fallback. |
 
 ## Project layout
 
@@ -176,7 +211,9 @@ src/lib/providers/       gnani/{prisma,timbre,voices}.ts, reasoning/{anthropic,o
 src/lib/sim/             persona, prompts, state machine, engine
 src/lib/coach/           rubric, scoring, metrics, report verification, prompts, markdown export
 src/lib/audio/           WAV encode/parse/validate
-src/lib/client/          recorder hook, API client, localStorage history
+src/lib/client/          API client, localStorage history, voice/ (ring, audio worklet + PCM player, live call and sample call engines)
+src/lib/voice/           utterance segmenter, barge-in detector, voice-timing tracker, SSE parser (pure, unit-tested)
+src/lib/sample/          the scripted sample call and its report
 tests/unit, tests/integration, scripts/gnani-smoke.ts, docs/COACHING_FRAMEWORK.md
 ```
 

@@ -18,7 +18,9 @@ export const TurnSchema = z.object({
   englishText: z.string().max(MAX_UTTERANCE_CHARS * 2).optional(),
   /** How the learner text was produced. "typed" is never presented as Prisma output. */
   source: z.enum(["prisma", "typed", "model"]).default("model"),
-  audioSeconds: z.number().min(0).max(120).optional(),
+  audioSeconds: z.number().min(0).max(600).optional(),
+  /** The learner talked over this client line before it finished. */
+  interrupted: z.boolean().optional(),
   at: z.number().optional(),
 });
 export type Turn = z.infer<typeof TurnSchema>;

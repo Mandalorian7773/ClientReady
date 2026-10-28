@@ -12,13 +12,9 @@ const NAV = [
 
 export function Logo() {
   return (
-    <span className="flex items-center gap-2">
-      <span aria-hidden className="relative grid h-7 w-7 place-items-center rounded-lg bg-signal text-signal-ink">
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-          <path d="M5 10v4M9 7v10M13 9v6M17 5v14M21 10v4" />
-        </svg>
-      </span>
-      <span className="text-[15px] font-semibold tracking-tight">ClientReady</span>
+    <span className="flex items-center gap-2.5">
+      <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-accent-bright" />
+      <span className="text-[13px] font-medium tracking-[0.22em]">CLIENTREADY</span>
     </span>
   );
 }
@@ -27,19 +23,19 @@ export function SiteHeader() {
   const path = usePathname();
   if (path?.startsWith("/practice/session")) return null;
   return (
-    <header className="no-print sticky top-0 z-40 border-b border-border/60 bg-bg/75 backdrop-blur-md">
+    <header className="no-print rule-b sticky top-0 z-40 bg-bg/90 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" aria-label="ClientReady home">
           <Logo />
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex items-center gap-1">
           {NAV.map((n) => (
             <Link
               key={n.href}
               href={n.href}
               className={cn(
-                "rounded-md px-2.5 py-1.5 transition-colors sm:px-3",
-                path === n.href ? "text-fg" : "text-fg-muted hover:text-fg",
+                "label px-2.5 py-1.5 transition-colors sm:px-3",
+                path === n.href ? "text-signal" : "text-fg-muted hover:text-fg",
                 n.href.startsWith("/#") && "hidden sm:inline",
               )}
             >

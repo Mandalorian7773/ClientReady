@@ -18,6 +18,11 @@ export interface SynthesisProvider {
     audio: Uint8Array;
     contentType: string;
   }>;
+  /** Optional streaming synthesis: an SSE body of base64 raw 16-bit PCM chunks. */
+  stream?(input: { text: string; voice: string; language: string; speed?: number }): Promise<{
+    body: ReadableStream<Uint8Array>;
+    sampleRate: number;
+  }>;
 }
 
 export interface ChatMessage {

@@ -128,8 +128,11 @@ export default function BriefingPage() {
             )}
           </Card>
           <Button size="lg" onClick={() => router.push("/practice/session")}>
-            Start the call <ArrowRight className="h-4 w-4" />
+            Go to the call <ArrowRight className="h-4 w-4" />
           </Button>
+          <Link href="/practice/session?sample" className="label -mt-3 text-center text-fg-muted hover:text-signal">
+            Or hear a scripted sample call first
+          </Link>
         </aside>
       </div>
     </div>

@@ -7,21 +7,22 @@ export const cn = clsx;
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
 
+// Optikka buttons: pill-shaped, small uppercase type, ink on paper.
 const variants: Record<Variant, string> = {
-  primary: "bg-signal text-signal-ink hover:bg-signal-strong shadow-[0_0_0_1px_rgba(255,184,74,0.4),0_8px_24px_-8px_rgba(245,165,36,0.55)]",
-  secondary: "bg-surface-2 text-fg border border-border-strong hover:border-fg-subtle",
-  ghost: "text-fg-muted hover:text-fg hover:bg-surface-2",
-  danger: "text-low border border-low/40 hover:bg-low/10",
+  primary: "bg-fg text-bg border border-fg hover:bg-signal-strong hover:border-signal-strong",
+  secondary: "border border-fg text-fg hover:bg-fg hover:text-bg",
+  ghost: "border border-transparent text-fg-muted hover:text-fg hover:border-rule",
+  danger: "border border-low/60 text-low hover:bg-low hover:text-bg",
 };
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-sm gap-1.5",
-  md: "h-10 px-4 text-sm gap-2",
-  lg: "h-12 px-6 text-base gap-2",
+  sm: "h-8 px-3.5 text-[11px] gap-1.5",
+  md: "h-10 px-5 text-[11px] gap-2",
+  lg: "h-12 px-6 text-xs gap-2",
 };
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", extra?: string) {
   return cn(
-    "inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 select-none",
+    "inline-flex items-center justify-center rounded-full font-medium uppercase tracking-[0.06em] transition-colors disabled:cursor-not-allowed disabled:opacity-40 select-none",
     variants[variant],
     sizes[size],
     extra,
@@ -37,29 +38,29 @@ export function ButtonLink({ variant = "primary", size = "md", className, ...pro
 }
 
 export function Card({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("rounded-2xl border border-border bg-surface/80 backdrop-blur-sm", className)} {...props} />;
+  return <div className={cn("rounded-sm border border-dotted border-rule bg-bg-raised/40", className)} {...props} />;
 }
 
 export function Badge({ tone = "neutral", className, children }: { tone?: "neutral" | "signal" | "client" | "good" | "mid" | "low"; className?: string; children: ReactNode }) {
   const tones = {
     neutral: "border-border-strong text-fg-muted",
-    signal: "border-signal/40 text-signal bg-signal/10",
-    client: "border-client/40 text-client bg-client/10",
-    good: "border-good/40 text-good bg-good/10",
-    mid: "border-mid/40 text-mid bg-mid/10",
-    low: "border-low/40 text-low bg-low/10",
+    signal: "border-signal/50 text-signal",
+    client: "border-client/50 text-client",
+    good: "border-good/50 text-good",
+    mid: "border-mid/50 text-mid",
+    low: "border-low/50 text-low",
   };
-  return <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium", tones[tone], className)}>{children}</span>;
+  return <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]", tones[tone], className)}>{children}</span>;
 }
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn("font-mono text-[11px] uppercase tracking-[0.18em] text-fg-subtle", className)}>{children}</p>;
+  return <p className={cn("label text-fg-subtle", className)}>{children}</p>;
 }
 
 export function Field({ label, hint, htmlFor, children, className }: { label: string; hint?: string; htmlFor: string; children: ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-sm font-medium text-fg">
+      <label htmlFor={htmlFor} className="label text-fg-muted">
         {label}
       </label>
       {children}
@@ -68,15 +69,16 @@ export function Field({ label, hint, htmlFor, children, className }: { label: st
   );
 }
 
+// Optikka fields: no box, a dotted underline that turns orange on focus.
 const inputBase =
-  "w-full rounded-lg border border-border-strong bg-bg-raised px-3 text-sm text-fg placeholder:text-fg-subtle transition-colors hover:border-fg-subtle focus:border-signal focus:outline-none";
+  "w-full rounded-none border-0 border-b border-dotted border-fg-subtle bg-transparent px-0 text-[17px] tracking-[-0.01em] text-fg placeholder:text-fg-subtle/80 transition-colors focus:border-solid focus:border-signal-strong focus:outline-none";
 
 export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={cn(inputBase, "h-10", props.className)} />;
 }
 
 export function Textarea(props: ComponentProps<"textarea">) {
-  return <textarea {...props} className={cn(inputBase, "min-h-20 py-2 leading-relaxed", props.className)} />;
+  return <textarea {...props} className={cn(inputBase, "min-h-16 resize-y py-1.5 leading-snug", props.className)} />;
 }
 
 export function Select({ options, ...props }: ComponentProps<"select"> & { options: Array<{ value: string; label: string }> }) {
@@ -113,8 +115,8 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-            value === o.value ? "border-signal bg-signal/12 text-fg" : "border-border-strong text-fg-muted hover:border-fg-subtle hover:text-fg",
+            "rounded-full border px-3 py-1 text-sm transition-colors",
+            value === o.value ? "border-fg bg-fg text-bg" : "border-rule text-fg-muted hover:border-fg hover:text-fg",
           )}
         >
           {o.label}
@@ -126,12 +128,12 @@ export function Segmented<T extends string>({
 
 export function Notice({ tone = "info", title, children, action }: { tone?: "info" | "warn" | "error"; title?: string; children: ReactNode; action?: ReactNode }) {
   const tones = {
-    info: "border-client/30 bg-client/5",
-    warn: "border-mid/40 bg-mid/5",
-    error: "border-low/40 bg-low/5",
+    info: "border-client/40 bg-bg-raised/60",
+    warn: "border-mid/50 bg-bg-raised/60",
+    error: "border-low/60 bg-bg-raised/60",
   };
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={cn("flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between", tones[tone])}>
+    <div role={tone === "error" ? "alert" : "status"} className={cn("flex flex-col gap-2 rounded-sm border border-dotted px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between", tones[tone])}>
       <div>
         {title && <p className="font-medium text-fg">{title}</p>}
         <div className="text-fg-muted">{children}</div>

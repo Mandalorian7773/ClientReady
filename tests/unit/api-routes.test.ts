@@ -3,7 +3,7 @@ import { scenario, sampleTurns, toneWav } from "../helpers/fixtures";
 import { resetRateLimits } from "@/lib/server/rate-limit";
 import { clearIdempotency } from "@/lib/server/idempotency";
 
-const ENV_KEYS = ["GNANI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "REASONING_PROVIDER", "OPENAI_COMPAT_BASE_URL", "OPENAI_COMPAT_MODEL", "RATE_LIMIT_PER_MINUTE"];
+const ENV_KEYS = ["GNANI_COACH_VOICE", "GNANI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "REASONING_PROVIDER", "OPENAI_COMPAT_BASE_URL", "OPENAI_COMPAT_MODEL", "RATE_LIMIT_PER_MINUTE"];
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
@@ -126,6 +126,30 @@ describe("/api/stt and /api/tts without Gnani credentials", () => {
   });
 });
 
+describe("/api/tts/stream", () => {
+  it("validates input and reports missing configuration", async () => {
+    const { POST } = await import("@/app/api/tts/stream/route");
+    expect((await POST(post("/api/tts/stream", { text: "" }))).status).toBe(400);
+    const res = await POST(post("/api/tts/stream", { text: "Hello", kind: "coach" }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("not_configured");
+  });
+
+  it("streams the upstream SSE body with the sample rate and voice", async () => {
+    process.env.GNANI_API_KEY = "test-key";
+    const sse = 'event: chunk\ndata: {"audio":"AAA="}\n\nevent: complete\ndata: {"audio":""}\n\n';
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+    const { POST } = await import("@/app/api/tts/stream/route");
+    const res = await POST(post("/api/tts/stream", { text: "Here is your debrief.", kind: "coach", language: "en-IN" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    expect(res.headers.get("X-Sample-Rate")).toBe("24000");
+    expect(res.headers.get("X-TTS-Voice")).toBe("Trupti");
+    expect(await res.text()).toBe(sse);
+    expect(JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body)).voice).toBe("Trupti");
+  });
+});
+
 describe("/api/stt with a mocked Gnani backend", () => {
   it("returns the transcript and duration", async () => {
     process.env.GNANI_API_KEY = "test-key";
@@ -160,5 +184,6 @@ describe("/api/report", () => {
     const r = await res.json();
     expect(r.isDemo).toBe(true);
     expect(r.categories).toHaveLength(9);
+    expect(r.spoken[0].text).toMatch(/^The conversation between you and the client has now ended/);
   });
 });

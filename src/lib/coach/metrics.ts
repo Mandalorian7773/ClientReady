@@ -1,4 +1,5 @@
 import type { Turn } from "@/lib/sim/types";
+import type { VoiceMetrics } from "@/lib/voice/delivery";
 
 /**
  * Delivery metrics computed only from things we actually measured: recorded
@@ -8,6 +9,8 @@ import type { Turn } from "@/lib/sim/types";
 
 const FILLERS_EN = ["um", "uh", "erm", "uhh", "umm", "like", "basically", "actually", "you know", "i mean", "sort of", "kind of"];
 const FILLERS_HI = ["matlab", "toh", "na", "haan", "accha"];
+/** Hedges weaken a claim or a price ("I think it's a good price"). */
+const HEDGES = ["i think", "maybe", "probably", "i guess", "i'm not sure", "hopefully", "try to", "kind of", "sort of", "i feel like"];
 
 export interface DeliveryMetrics {
   learnerTurns: number;
@@ -23,6 +26,10 @@ export interface DeliveryMetrics {
   questionsAsked: number;
   /** Learner share of words in the conversation, 0..1. */
   talkShare: number;
+  hedgeCount: number;
+  hedgesPer100Words: number;
+  /** Timing signals measured from the microphone during a live call, if any. */
+  voice: VoiceMetrics | null;
 }
 
 export function countWords(text: string): number {
@@ -44,7 +51,12 @@ function countFillers(text: string): number {
   return n;
 }
 
-export function computeDeliveryMetrics(turns: Turn[]): DeliveryMetrics {
+export function countHedges(text: string): number {
+  const t = ` ${text.toLowerCase().replace(/[^\p{L}'\s]/gu, " ").replace(/\s+/g, " ")} `;
+  return HEDGES.reduce((n, h) => n + (t.split(` ${h} `).length - 1), 0);
+}
+
+export function computeDeliveryMetrics(turns: Turn[], voice: VoiceMetrics | null = null): DeliveryMetrics {
   const learner = turns.filter((t) => t.role === "learner");
   const client = turns.filter((t) => t.role === "client");
   const words = learner.map((t) => countWords(t.englishText || t.text));
@@ -53,6 +65,7 @@ export function computeDeliveryMetrics(turns: Turn[]): DeliveryMetrics {
   const spokenWords = spoken.reduce((a, t) => a + countWords(t.text), 0);
   const spokenSecs = spoken.reduce((a, t) => a + (t.audioSeconds ?? 0), 0);
   const fillerCount = learner.reduce((a, t) => a + countFillers(t.text), 0);
+  const hedgeCount = learner.reduce((a, t) => a + countHedges(t.englishText || t.text), 0);
   const clientWords = client.reduce((a, t) => a + countWords(t.text), 0);
 
   return {
@@ -67,6 +80,9 @@ export function computeDeliveryMetrics(turns: Turn[]): DeliveryMetrics {
     longestTurnWords: words.length ? Math.max(...words) : 0,
     questionsAsked: learner.reduce((a, t) => a + ((t.englishText || t.text).match(/\?/g) ?? []).length, 0),
     talkShare: totalWords + clientWords ? Math.round((totalWords / (totalWords + clientWords)) * 100) / 100 : 0,
+    hedgeCount,
+    hedgesPer100Words: totalWords ? Math.round((hedgeCount / totalWords) * 1000) / 10 : 0,
+    voice,
   };
 }
 
@@ -76,6 +92,7 @@ export function computeDeliveryMetrics(turns: Turn[]): DeliveryMetrics {
  *  - pace: 110–170 wpm comfortable for international listeners
  *  - fillers: under 3 per 100 words
  *  - answer size: 15–110 words per turn on average, no 200+ word monologues
+ *  - hedges: under 3 per 100 words; answer delay under 3 s (when measured)
  * Returns null when there is nothing to assess.
  */
 export function scoreDelivery(m: DeliveryMetrics): number | null {
@@ -99,6 +116,8 @@ export function scoreDelivery(m: DeliveryMetrics): number | null {
   else if (m.avgWordsPerTurn < 6) score -= 15;
   else score -= 6;
   if (m.longestTurnWords > 200) score -= 8;
+  if (m.hedgesPer100Words >= 3) score -= 5;
+  if (m.voice?.medianAnswerDelayMs != null && m.voice.medianAnswerDelayMs > 3000) score -= 4;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }

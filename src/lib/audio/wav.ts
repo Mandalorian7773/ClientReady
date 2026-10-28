@@ -41,6 +41,13 @@ export function encodeWavPcm16(samples: Float32Array, sampleRate: number): Uint8
   return new Uint8Array(buf);
 }
 
+/** Wrap already-quantised 16-bit mono samples in a WAV header. */
+export function encodeWavFromInt16(samples: Int16Array, sampleRate: number): Uint8Array {
+  const f = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) f[i] = samples[i] / 32768;
+  return encodeWavPcm16(f, sampleRate);
+}
+
 export interface WavInfo {
   sampleRate: number;
   channels: number;

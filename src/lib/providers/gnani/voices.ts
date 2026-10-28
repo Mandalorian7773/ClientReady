@@ -72,3 +72,12 @@ export function coachingVoice(model: string, ttsLanguage: string): string {
   if (model === "timbre-v3.0") return set.english.female[0];
   return set.byLanguage[ttsLanguage] ?? set.english.female[0];
 }
+
+/** The debrief coach's voice: a fixed English voice, or the coaching language's voice. */
+export function debriefVoice(model: string, ttsLanguage: string, override?: string): string {
+  if (ttsLanguage === "en-IN") {
+    if (override && isKnownVoice(model, override)) return override;
+    return model === "timbre-v3.0" ? "Kalpana" : "Trupti";
+  }
+  return coachingVoice(model, ttsLanguage);
+}

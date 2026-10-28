@@ -8,6 +8,8 @@ import { deleteAllSessions, deleteSession, listSessions, type SavedSession } fro
 import { CATEGORIES } from "@/lib/coach/rubric";
 import { scoreBand } from "@/lib/coach/score";
 
+const answerCount = (s: SavedSession) => s.turns.filter((t) => t.role === "learner").length;
+
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<SavedSession[] | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -15,7 +17,8 @@ export default function HistoryPage() {
   useEffect(() => setSessions(listSessions()), []);
   if (sessions === null) return null;
 
-  const scored = sessions.filter((s) => s.report && s.report.overall !== null).slice().reverse();
+  // The scripted sample call is not your own practice, so it stays out of the progress chart.
+  const scored = sessions.filter((s) => !s.sample && s.report && s.report.overall !== null).slice().reverse();
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-14">
@@ -59,11 +62,11 @@ export default function HistoryPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{s.scenario.title}</p>
                       <p className="truncate text-sm text-fg-muted">
-                        {s.scenario.client.name} · {s.turns.filter((t) => t.role === "learner").length} answers · {new Date(s.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                        {s.scenario.client.name} · {answerCount(s)} answer{answerCount(s) === 1 ? "" : "s"} · {new Date(s.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                       </p>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         <Badge>{s.report ? band.label : "No report yet"}</Badge>
-                        {s.isDemo && <Badge tone="mid">Demo engine</Badge>}
+                        {s.sample ? <Badge tone="mid">Sample call</Badge> : s.isDemo && <Badge tone="mid">Demo engine</Badge>}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-2">

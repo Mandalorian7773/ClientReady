@@ -90,6 +90,10 @@ describe("generateCoachReport", () => {
         issues: [],
         plan: [{ title: "Close", why: "No date", exercise: "Practise", successMetric: "Date agreed" }],
         languageBridge: [],
+        deliveryNotes: ["No fillers."],
+        proposalSteps: ["Restate the problem."],
+        nextDrill: "Close with a date.",
+        spoken: [{ label: "Strength", text: "In this part you said, 'How many calls do you miss in a typical week'. Good question.", refType: "strength", refIndex: 0 }],
       },
     ]);
     const r = await generateCoachReport(provider, scenario, sampleTurns, state);
@@ -98,6 +102,10 @@ describe("generateCoachReport", () => {
     expect(r.isDemo).toBe(false);
     expect(calls[0].purpose).toBe("coach-report");
     expect(calls[0].messages[0].content).toContain("[1] FREELANCER (spoken, 6.0s)");
+    expect(r.spoken[0].text.startsWith("The conversation between you and the client has now ended.")).toBe(true);
+    expect(r.spoken[1].ref).toEqual({ type: "strength", index: 0 });
+    expect(r.spoken.at(-1)!.text).toMatch(/report/i);
+    expect(r.nextDrill).toBe("Close with a date.");
   });
 
   it("writes the coach prompt in the learner's coaching language", async () => {

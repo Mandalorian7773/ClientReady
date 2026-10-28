@@ -15,6 +15,10 @@ function wire(overrides: Partial<CoachReportWire> = {}): CoachReportWire {
     issues: [],
     plan: [],
     languageBridge: [],
+    deliveryNotes: [],
+    proposalSteps: [],
+    nextDrill: "",
+    spoken: [],
     ...overrides,
   };
 }
@@ -189,5 +193,65 @@ describe("finalizeReport", () => {
     expect(md).toContain("# ClientReady coaching report");
     expect(md).toContain("## Transcript");
     expect(md).toContain("How many calls do you miss");
+  });
+});
+
+describe("spoken debrief", () => {
+  const state = initialClientState(scenario);
+  const issue = (quote: string, turn = 3) => ({
+    title: "Price", category: "offer" as const, turn, quote, whatWasMissing: "value first", whyItMattered: "busy",
+    betterResponse: "If it books two patients a month it pays for itself.", whyBetterWorks: "outcome first", principleId: "value-pricing", exercise: "drill",
+  });
+
+  it("drops segments whose moment or quote can't be verified, and remaps strengths", async () => {
+    const { finalizeReport: fin, DEBRIEF_OPENING, spokenQuote } = await import("@/lib/coach/report");
+    const r = fin(
+      wire({
+        strengths: [
+          { turn: 1, quote: "invented praise line", why: "x" },
+          { turn: 1, quote: "How many calls do you miss", why: "good discovery" },
+        ],
+        issues: [issue("costs $2,000 for setup"), issue("I promise a 100% guarantee")],
+        spoken: [
+          { label: "Price", text: "In this part you said, 'costs $2,000 for setup'. Lead with value.", refType: "issue", refIndex: 0 },
+          { label: "Fake", text: "In this part you said, 'I promise a 100% guarantee'. Never promise that.", refType: "issue", refIndex: 1 },
+          { label: "Gone", text: "Nice praise.", refType: "strength", refIndex: 0 },
+          { label: "Kept", text: "In this part you said, 'How many calls do you miss'. Great question.", refType: "strength", refIndex: 1 },
+          { label: "Sneaky", text: "In this part you said, 'something you never said'. Fix it.", refType: "none", refIndex: -1 },
+        ],
+      }),
+      sampleTurns,
+      state,
+      { generatedBy: "t", isDemo: false },
+    );
+    const labels = r.spoken.map((s) => s.label);
+    expect(labels).toEqual(["Call ended", "Price", "Kept", "Report"]);
+    expect(r.spoken[0].text).toBe(DEBRIEF_OPENING);
+    expect(r.spoken[2].ref).toEqual({ type: "strength", index: 0 });
+    expect(spokenQuote("In this part you said, “ok then”. Next.")).toBe("ok then");
+  });
+
+  it("does not force English opening lines on a non-English debrief", async () => {
+    const { finalizeReport: fin } = await import("@/lib/coach/report");
+    const r = fin(wire({ spoken: [{ label: "शुरुआत", text: "कॉल खत्म हो गई है।", refType: "none", refIndex: -1 }] }), sampleTurns, state, {
+      generatedBy: "t", isDemo: false, englishDebrief: false,
+    });
+    expect(r.spoken).toHaveLength(1);
+  });
+
+  it("caps segment length and count", async () => {
+    const { finalizeReport: fin } = await import("@/lib/coach/report");
+    const long = { label: "L", text: "Sentence one. ".repeat(100), refType: "none" as const, refIndex: -1 };
+    const r = fin(wire({ spoken: Array(15).fill(long) }), sampleTurns, state, { generatedBy: "t", isDemo: false });
+    expect(r.spoken.length).toBeLessThanOrEqual(9);
+    for (const s of r.spoken) expect(s.text.length).toBeLessThanOrEqual(701);
+  });
+
+  it("includes hedges and microphone metrics in delivery", () => {
+    const m = computeDeliveryMetrics([turn(0, "Hi"), turn(1, "I think it's a good price, maybe we can start soon")], {
+      speakingSeconds: 5, clientSeconds: 10, talkTimeSharePct: 33, medianAnswerDelayMs: 4200, midAnswerPauses: 2, longestPauseMs: 1500, loudnessVariation: 0.4,
+    });
+    expect(m.hedgeCount).toBe(2);
+    expect(m.voice?.medianAnswerDelayMs).toBe(4200);
   });
 });

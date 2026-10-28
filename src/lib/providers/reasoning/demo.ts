@@ -330,5 +330,26 @@ export function demoCoachReport(s: Scenario, dossier: PersonaDossier, turns: Tur
       successMetric: `Score 70+ in ${id} next session.`,
     })),
     languageBridge: [],
+    deliveryNotes: [
+      m.fillerCount ? `${m.fillerCount} filler word(s) across ${learners.length} answer(s).` : "No filler words detected in your answers.",
+      ...(m.hedgeCount ? [`${m.hedgeCount} hedge(s) such as "I think" or "maybe", which soften your claims.`] : []),
+    ],
+    proposalSteps: [
+      `Restate ${s.client.name.split(" ").slice(-1)[0]}'s problem in their own words.`,
+      "Offer two options: a small, low-risk first step and the full scope.",
+      `Give scope, timeline and price for each, in one breath each (the full scope is ${price}).`,
+      "Name the next step and ask which option fits better, then stop talking.",
+    ],
+    nextDrill: issues[0]?.exercise ?? "Replay this scenario and end with a specific next step.",
+    spoken: [
+      ...issues.slice(0, 3).map((i, idx) => ({
+        label: CATEGORIES.find((c) => c.id === i.category)?.name.split(" ")[0] ?? "Coach",
+        text: i.quote
+          ? `In this part you said, '${i.quote}'. ${i.whatWasMissing} Here's how to do it better: ${i.betterResponse}`
+          : `${i.title}. ${i.whatWasMissing} Here's how to do it better: ${i.betterResponse}`,
+        refType: "issue" as const,
+        refIndex: idx,
+      })),
+    ],
   };
 }

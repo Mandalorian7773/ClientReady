@@ -3,6 +3,7 @@ import { CATEGORY_IDS, CATEGORIES, PRINCIPLES, type CategoryId } from "./rubric"
 import { overallScore } from "./score";
 import { computeDeliveryMetrics, scoreDelivery, type DeliveryMetrics } from "./metrics";
 import type { Turn, ClientState } from "@/lib/sim/types";
+import type { VoiceMetrics } from "@/lib/voice/delivery";
 
 /** What the reasoning model returns. No numeric constraints here; we clamp afterwards. */
 const EvidenceWire = z.object({
@@ -54,6 +55,17 @@ export const CoachReportWireSchema = z.object({
       note: z.string().describe("What changed and why, in the coaching language"),
     }),
   ),
+  deliveryNotes: z.array(z.string().describe("A delivery observation tied to a measured metric or to the learner's wording")),
+  proposalSteps: z.array(z.string().describe("One step of how to put up a proposal to THIS client")),
+  nextDrill: z.string().describe("One specific thing to practise next session"),
+  spoken: z.array(
+    z.object({
+      label: z.string().describe("2-3 word label, e.g. Discovery"),
+      text: z.string().describe("What the coach says aloud for this segment"),
+      refType: z.enum(["issue", "strength", "none"]),
+      refIndex: z.number().describe("Index into issues or strengths; -1 when refType is none"),
+    }),
+  ),
 });
 export type CoachReportWire = z.infer<typeof CoachReportWireSchema>;
 
@@ -98,6 +110,37 @@ export interface CoachReport {
   metrics: DeliveryMetrics;
   /** Number of model-cited quotes we could not find in the transcript and removed. */
   droppedQuotes: number;
+  deliveryNotes: string[];
+  proposalSteps: string[];
+  nextDrill: string;
+  /** The spoken debrief, read aloud by the coach voice before the written report. */
+  spoken: SpokenSegment[];
+}
+
+export interface SpokenSegment {
+  label: string;
+  text: string;
+  ref: { type: "issue" | "strength"; index: number } | null;
+}
+
+/** The fixed first line of every English spoken debrief. */
+export const DEBRIEF_OPENING =
+  "The conversation between you and the client has now ended. Here are the areas where you could have done better.";
+export const DEBRIEF_CLOSING = "Your written report is on screen now.";
+const MAX_SEGMENTS = 9;
+const MAX_SEGMENT_CHARS = 700;
+
+/** Pull the quoted words out of "In this part you said, '...'" so they can be verified. */
+export function spokenQuote(text: string): string | null {
+  const m = text.match(/you said,?\s*["'‘“]([^"“”]+?)["'’”](?=[\s.,;!?]|$)/i);
+  return m ? m[1].trim() : null;
+}
+
+function trimTo(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+  return stop > max * 0.5 ? cut.slice(0, stop + 1) : `${cut.trim()}…`;
 }
 
 function norm(s: string): string {
@@ -138,7 +181,7 @@ export function finalizeReport(
   wire: CoachReportWire,
   turns: Turn[],
   state: ClientState,
-  meta: { generatedBy: string; isDemo: boolean; now?: number },
+  meta: { generatedBy: string; isDemo: boolean; now?: number; voice?: VoiceMetrics | null; englishDebrief?: boolean },
 ): CoachReport {
   let dropped = 0;
   const keep = (e: { turn: number; quote: string }): Evidence | null => {
@@ -150,7 +193,7 @@ export function finalizeReport(
     return { turn: t, quote: e.quote.trim() };
   };
 
-  const metrics = computeDeliveryMetrics(turns);
+  const metrics = computeDeliveryMetrics(turns, meta.voice ?? null);
   const deliveryScore = scoreDelivery(metrics);
 
   const categories: CategoryResult[] = CATEGORIES.map((c) => {
@@ -170,21 +213,26 @@ export function finalizeReport(
     };
   });
 
-  const strengths = wire.strengths
-    .map((s) => {
-      const e = keep(s);
-      return e ? { ...e, why: s.why.trim() } : null;
-    })
-    .filter((s): s is Evidence & { why: string } => s !== null)
-    .slice(0, 4);
+  const strengths: Array<Evidence & { why: string }> = [];
+  const strengthIndex = new Map<number, number>();
+  wire.strengths.forEach((s, i) => {
+    const e = keep(s);
+    if (e && strengths.length < 4) {
+      strengthIndex.set(i, strengths.length);
+      strengths.push({ ...e, why: s.why.trim() });
+    }
+  });
 
-  const issues = wire.issues.slice(0, 6).map((i) => {
+  const unverifiedIssues = new Set<number>();
+  const issues = wire.issues.slice(0, 6).map((i, idx) => {
     let turn: number | null = null;
     let quote: string | null = null;
     if (i.turn >= 0 && i.quote.trim()) {
       const t = verifyQuote(turns, Math.round(i.turn), i.quote);
-      if (t === null) dropped++;
-      else {
+      if (t === null) {
+        dropped++;
+        unverifiedIssues.add(idx);
+      } else {
         turn = t;
         quote = i.quote.trim();
       }
@@ -216,6 +264,8 @@ export function finalizeReport(
     }))
     .slice(0, 6);
 
+  const spoken = buildSpoken(wire, turns, issues.length, unverifiedIssues, strengthIndex, meta.englishDebrief ?? true);
+
   return {
     version: 1,
     generatedBy: meta.generatedBy,
@@ -236,5 +286,49 @@ export function finalizeReport(
     languageBridge,
     metrics,
     droppedQuotes: dropped,
+    deliveryNotes: wire.deliveryNotes.map((n) => n.trim()).filter(Boolean).slice(0, 5),
+    proposalSteps: wire.proposalSteps.map((n) => n.trim()).filter(Boolean).slice(0, 6),
+    nextDrill: wire.nextDrill.trim(),
+    spoken,
   };
+}
+
+/**
+ * Keep only spoken segments that point at verified moments, re-check any
+ * "you said, '…'" quote against the transcript, and make sure the English
+ * debrief opens and closes with the fixed lines.
+ */
+function buildSpoken(
+  wire: CoachReportWire,
+  turns: Turn[],
+  issueCount: number,
+  unverifiedIssues: Set<number>,
+  strengthIndex: Map<number, number>,
+  english: boolean,
+): SpokenSegment[] {
+  const out: SpokenSegment[] = [];
+  for (const seg of wire.spoken) {
+    const text = trimTo(seg.text.replace(/\s+/g, " ").trim(), MAX_SEGMENT_CHARS);
+    if (!text) continue;
+    let ref: SpokenSegment["ref"] = null;
+    const idx = Math.round(seg.refIndex);
+    if (seg.refType === "issue") {
+      if (idx < 0 || idx >= issueCount || unverifiedIssues.has(idx)) continue;
+      ref = { type: "issue", index: idx };
+    } else if (seg.refType === "strength") {
+      const mapped = strengthIndex.get(idx);
+      if (mapped === undefined) continue;
+      ref = { type: "strength", index: mapped };
+    }
+    const q = spokenQuote(text);
+    if (q && verifyQuote(turns, -1, q) === null) continue;
+    out.push({ label: seg.label.trim().slice(0, 40) || "Coach", text, ref });
+  }
+
+  if (english) {
+    if (!out[0]?.text.startsWith(DEBRIEF_OPENING)) out.unshift({ label: "Call ended", text: DEBRIEF_OPENING, ref: null });
+    if (!/report/i.test(out[out.length - 1]?.text ?? "")) out.push({ label: "Report", text: DEBRIEF_CLOSING, ref: null });
+  }
+  if (out.length > MAX_SEGMENTS) out.splice(MAX_SEGMENTS - 1, out.length - MAX_SEGMENTS);
+  return out;
 }

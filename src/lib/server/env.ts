@@ -42,6 +42,7 @@ export function getEnv() {
       apiKey: gnaniKey,
       baseUrl: read("GNANI_BASE_URL") ?? "https://api.vachana.ai",
       ttsModel: read("GNANI_TTS_MODEL") ?? "timbre-v2.5",
+      coachVoice: read("GNANI_COACH_VOICE"),
       sttTimeoutMs: Number(read("GNANI_STT_TIMEOUT_MS") ?? 30_000),
       ttsTimeoutMs: Number(read("GNANI_TTS_TIMEOUT_MS") ?? 30_000),
     },

@@ -4,6 +4,7 @@ import type { Scenario } from "@/lib/scenario/schema";
 import type { ClientState, Turn } from "@/lib/sim/types";
 import type { CoachReport } from "@/lib/coach/report";
 import type { PublicStatus } from "@/lib/server/env";
+import type { VoiceMetrics } from "@/lib/voice/delivery";
 
 export class ApiError extends Error {
   constructor(
@@ -60,7 +61,7 @@ export function requestClientTurn(
   return post<TurnResponse>("/api/turn", payload, signal);
 }
 
-export function requestReport(payload: { sessionId: string; scenario: Scenario; turns: Turn[]; clientState: ClientState }) {
+export function requestReport(payload: { sessionId: string; scenario: Scenario; turns: Turn[]; clientState: ClientState; voice?: VoiceMetrics | null }) {
   return post<CoachReport>("/api/report", payload);
 }
 

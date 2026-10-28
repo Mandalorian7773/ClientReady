@@ -12,8 +12,8 @@ export default function Home() {
       <section className="mx-auto grid max-w-6xl gap-12 px-4 pb-20 pt-14 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:pt-24">
         <div>
           <Eyebrow>For Indian freelancers selling to the world</Eyebrow>
-          <h1 className="mt-4 font-display text-5xl leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
-            Practise the client call <em className="text-signal">before</em> the real one.
+          <h1 className="mt-4 font-display text-5xl sm:text-6xl lg:text-7xl">
+            Practise the client call <span className="text-signal-strong">before</span> the real one.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-fg-muted">
             Speak to a realistic US, UK or Australian client who asks hard questions about your price, your scope and your AI. Then get coaching
@@ -23,11 +23,11 @@ export default function Home() {
             <ButtonLink href="/practice" size="lg">
               Start practising <ArrowRight className="h-4 w-4" />
             </ButtonLink>
-            <ButtonLink href="#how-it-works" size="lg" variant="secondary">
-              How it works
+            <ButtonLink href="/practice/session?sample" size="lg" variant="secondary">
+              Hear a sample call
             </ButtonLink>
           </div>
-          <p className="mt-4 text-sm text-fg-subtle">No sign-up. Your sessions stay in your browser.</p>
+          <p className="mt-4 text-sm text-fg-subtle">No sign-up. Your sessions stay in your browser. The sample call is scripted and uses your browser&apos;s voice.</p>
         </div>
         <DemoPreview />
       </section>

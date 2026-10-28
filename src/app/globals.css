@@ -1,28 +1,33 @@
 @import "tailwindcss";
 
 /*
- * ClientReady design tokens. A calm, dark "practice room":
- * ink surfaces, warm saffron signal for the learner, cool teal for the client,
- * green/amber/rose only for score semantics.
+ * ClientReady design tokens, Optikka style: warm paper, ink type, dotted
+ * rules, one orange phrase per screen. Token names are shared by every page.
+ *
+ * The bright orange (#e5623a) is only 2.6:1 on paper, so it is used for the
+ * voice ring and decoration; text uses the darker --signal shades (≥ 4.4:1).
  */
 :root {
-  --bg: #0a0b0f;
-  --bg-raised: #111319;
-  --surface: #161922;
-  --surface-2: #1d212c;
-  --border: #262b38;
-  --border-strong: #353b4b;
-  --fg: #eceef3;
-  --fg-muted: #a3a9b8;
-  --fg-subtle: #6e7586;
-  --signal: #f5a524;
-  --signal-strong: #ffb84a;
-  --signal-ink: #1a1204;
-  --client: #4fd1c5;
-  --good: #3ecf8e;
-  --mid: #f5c451;
-  --low: #f07178;
-  --focus: #ffcf7a;
+  --bg: #e8e1d6;
+  --bg-raised: #f1ece4;
+  --surface: #efe9e0;
+  --surface-2: #ded5c8;
+  --border: rgba(58, 48, 38, 0.16);
+  --border-strong: rgba(58, 48, 38, 0.32);
+  --rule: rgba(58, 48, 38, 0.3);
+  --fg: #3a3026;
+  --fg-muted: #655a4e;
+  --fg-subtle: #6b5f53;
+  --signal: #a63c1b;
+  --signal-strong: #c24a22;
+  --signal-ink: #fff7ef;
+  --accent-bright: #e5623a;
+  --mist: #b9b1a7;
+  --client: #44606a;
+  --good: #2f6b3f;
+  --mid: #7a5307;
+  --low: #9c3a24;
+  --focus: #c24a22;
 }
 
 @theme inline {
@@ -32,23 +37,26 @@
   --color-surface-2: var(--surface-2);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-rule: var(--rule);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
   --color-signal: var(--signal);
   --color-signal-strong: var(--signal-strong);
   --color-signal-ink: var(--signal-ink);
+  --color-accent-bright: var(--accent-bright);
+  --color-mist: var(--mist);
   --color-client: var(--client);
   --color-good: var(--good);
   --color-mid: var(--mid);
   --color-low: var(--low);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter-tight), "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-display-serif), Georgia, serif;
+  --font-display: var(--font-inter-tight), "Helvetica Neue", Arial, sans-serif;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
   scroll-behavior: smooth;
 }
 
@@ -60,25 +68,57 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Display type: large, medium weight, tightly tracked. */
+.font-display {
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+/* Small uppercase labels used across the board layout. */
+.label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 ::selection {
-  background: color-mix(in oklab, var(--signal) 35%, transparent);
+  background: color-mix(in oklab, var(--accent-bright) 30%, transparent);
 }
 
 :focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  border-radius: 6px;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .grain {
-  background-image:
-    radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, var(--signal) 9%, transparent), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, color-mix(in oklab, var(--client) 7%, transparent), transparent 60%);
+  background-image: radial-gradient(1100px 520px at 85% -10%, color-mix(in oklab, var(--accent-bright) 7%, transparent), transparent 60%);
 }
 
 .hairline {
-  background-image: linear-gradient(to right, transparent, var(--border-strong), transparent);
-  height: 1px;
+  border-top: 1px dotted var(--rule);
+  height: 0;
+}
+
+.rule-b {
+  border-bottom: 1px dotted var(--rule);
+}
+.rule-t {
+  border-top: 1px dotted var(--rule);
+}
+.rule-l {
+  border-left: 1px dotted var(--rule);
+}
+.rule-r {
+  border-right: 1px dotted var(--rule);
 }
 
 @keyframes pulse-ring {
@@ -97,10 +137,10 @@ body {
 .pulse-ring::after { animation-delay: 0.8s; }
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0.001; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }
-.rise { animation: rise 0.35s ease-out both; }
+.rise { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
 @keyframes dots {
   0%, 80%, 100% { opacity: 0.2; }
@@ -115,10 +155,7 @@ body {
 }
 
 @media print {
-  :root {
-    --bg: #fff; --bg-raised: #fff; --surface: #fff; --surface-2: #f6f6f6;
-    --border: #ddd; --border-strong: #ccc; --fg: #111; --fg-muted: #444; --fg-subtle: #666;
-  }
+  :root { --bg: #fff; --bg-raised: #fff; --surface: #fff; }
   .no-print { display: none !important; }
   body { background: #fff; }
 }

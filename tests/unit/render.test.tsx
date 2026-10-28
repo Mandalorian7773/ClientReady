@@ -28,6 +28,10 @@ describe("safe rendering of model-generated text", () => {
         ],
         plan: [{ title: XSS, why: XSS, exercise: XSS, successMetric: XSS }],
         languageBridge: [],
+        deliveryNotes: [XSS],
+        proposalSteps: [XSS],
+        nextDrill: XSS,
+        spoken: [],
       },
       turns,
       state,
@@ -46,7 +50,7 @@ describe("safe rendering of model-generated text", () => {
     const turns = [turn(0, "Hello"), turn(1, "Hi")];
     const state = initialClientState(scenario);
     const report = finalizeReport(
-      { summary: "s", categories: [], strengths: [], issues: [], plan: [], languageBridge: [] },
+      { summary: "s", categories: [], strengths: [], issues: [], plan: [], languageBridge: [], deliveryNotes: [], proposalSteps: [], nextDrill: "", spoken: [] },
       turns,
       state,
       { generatedBy: "Demo engine (rule-based, not an LLM)", isDemo: true },

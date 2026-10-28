@@ -5,6 +5,7 @@ import { asData, dataBlock } from "@/lib/sim/sanitize";
 import type { ClientState, PersonaDossier, Turn } from "@/lib/sim/types";
 import { CATEGORIES, PRINCIPLES } from "./rubric";
 import type { DeliveryMetrics } from "./metrics";
+import { DEBRIEF_OPENING } from "./report";
 
 export function buildCoachSystemPrompt(s: Scenario): string {
   const coachLang = getLanguage(s.learner.coachingLanguage);
@@ -33,6 +34,20 @@ export function buildCoachSystemPrompt(s: Scenario): string {
 - issues: the 3-5 most important issues, highest impact first. Each: what was missing, why it mattered to THIS client, a better English response, why it works, principleId, a short exercise.
 - plan: exactly 3 highest-impact improvements for next session, each with a personalised exercise and a measurable success metric.
 - languageBridge: ${bridge ? "for up to 4 learner turns that were not in English or were unclear, give the original, a clearer professional English version preserving every number, price, product name and technical term, and a short note." : "empty array (session was in English)."}
+- deliveryNotes: 1-4 short notes on delivery. Each must name its evidence: a measured metric (fillers, hedges, pace, answer delay, mid-answer pauses, loudness variation, talk share) or the learner's own wording. Never invent vocal qualities you were not given, and never mention accent.
+- proposalSteps: 3-5 steps for how THIS learner should put up a proposal to THIS client (restate the problem, options such as a pilot vs full scope, price per option, next step, then stop talking).
+- nextDrill: one specific, repeatable thing to practise next session.
+
+# Spoken debrief ("spoken")
+The coach reads these segments aloud, one after another, before the written report: 60-120 seconds in total, 4-8 segments, short sentences, warm and direct, no lists or symbols.
+${coachLang.id === "en"
+    ? `- The first segment's text starts exactly with: "${DEBRIEF_OPENING}"`
+    : `- Write the segments in ${asData(coachLang.label)}. The first segment says the call has ended and these are the areas to improve.`}
+- Each mistake segment follows: "In this part you said, '<exact quote from that issue>'. <what was wrong, one sentence>. Here's how to <do it properly>: <the better line or method>." Set refType "issue" and refIndex to that issue's index. Keep the quote exactly as in the transcript${coachLang.id === "en" ? "" : " (in its original language)"}; keep better lines in English.
+- You may include one segment on something that went well (refType "strength", refIndex its index).
+- If delivery was an issue, add a segment like "Your tone could have sounded more confident." followed by the measured evidence and one concrete fix (refType "none").
+- The last segment says the written report is on screen.
+- Only quote moments that appear in "issues" or "strengths". Use refType "none" and refIndex -1 for segments that refer to neither.
 
 # Rubric
 ${rubric}
@@ -100,6 +115,17 @@ ${dataBlock({
   "Filler words per 100 words": metrics.fillersPer100Words,
   "Questions asked": metrics.questionsAsked,
   "Freelancer share of words": `${Math.round(metrics.talkShare * 100)}%`,
+  "Hedges (e.g. I think, maybe)": `${metrics.hedgeCount} (${metrics.hedgesPer100Words} per 100 words)`,
+  ...(metrics.voice
+    ? {
+        "Seconds speaking / client speaking": `${metrics.voice.speakingSeconds} / ${metrics.voice.clientSeconds}`,
+        "Talk-time share": metrics.voice.talkTimeSharePct === null ? "n/a" : `${metrics.voice.talkTimeSharePct}%`,
+        "Median delay before answering": metrics.voice.medianAnswerDelayMs === null ? "n/a" : `${(metrics.voice.medianAnswerDelayMs / 1000).toFixed(1)} s`,
+        "Pauses over 0.6 s mid-answer": metrics.voice.midAnswerPauses,
+        "Longest mid-answer pause": `${(metrics.voice.longestPauseMs / 1000).toFixed(1)} s`,
+        "Loudness variation (coefficient)": metrics.voice.loudnessVariation ?? "n/a",
+      }
+    : { "Microphone timing metrics": "not measured (typed or recorded per turn)" }),
 })}
 
 # DATA: Transcript (turn index in brackets)

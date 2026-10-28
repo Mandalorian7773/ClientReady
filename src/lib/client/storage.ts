@@ -22,6 +22,8 @@ export interface SavedSession {
   report: CoachReport | null;
   generatedBy: string;
   isDemo: boolean;
+  /** The scripted sample call (not a real practice session). */
+  sample?: boolean;
 }
 
 function safeGet(key: string): string | null {
