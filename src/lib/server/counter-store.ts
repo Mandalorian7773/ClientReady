@@ -19,7 +19,7 @@ export interface CounterStore {
 }
 
 export class MemoryStore implements CounterStore {
-  readonly durable = false;
+  readonly durable: boolean = false;
   private data = new Map<string, { value: number; expiresAt: number }>();
   constructor(private now: () => number = Date.now) {}
 

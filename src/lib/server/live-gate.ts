@@ -131,6 +131,8 @@ export function liveError(reason: LiveReason): AppError {
  * claimed, and the per-session cap for `kind` must not be exceeded.
  * `amount` adds to a second budget (audio seconds or characters).
  */
+let warnedClaims = false;
+
 export async function chargeSession(
   sessionId: unknown,
   kind: CapKind,
@@ -140,8 +142,17 @@ export async function chargeSession(
     throw new AppError("session_required", "This request needs an active practice session. Start a call first.", 429);
   }
   const store = getStore();
-  if (!(await store.hasFlag(keys.session(sessionId)))) {
-    throw new AppError("session_required", "This practice session isn't active. Start a new call to continue.", 429);
+  // The claim check needs storage shared by every route. On Vercel each route
+  // is a separate function, so in-memory claims made by /api/session are
+  // invisible here; without Upstash we skip this check rather than refuse
+  // every call. Per-session caps below still apply (per instance).
+  if (store.durable) {
+    if (!(await store.hasFlag(keys.session(sessionId)))) {
+      throw new AppError("session_required", "This practice session isn't active. Start a new call to continue.", 429);
+    }
+  } else if (!warnedClaims) {
+    warnedClaims = true;
+    console.warn("[limits] No shared store: session claims can't be checked across routes. Set UPSTASH_REDIS_REST_URL/TOKEN to enforce them.");
   }
   if ((await store.incr(keys.cap(sessionId, kind), 1, SESSION_TTL_SECONDS)) > SESSION_CAPS[kind]) {
     throw new AppError("session_limit", "This session has reached its usage limit. Start a new call to keep practising.", 429);

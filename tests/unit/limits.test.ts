@@ -5,6 +5,11 @@ import { addUsage, availability, claimSession, SESSION_CAPS, usageReport, charge
 import { resetRateLimits } from "@/lib/server/rate-limit";
 import { toneWav } from "../helpers/fixtures";
 
+/** Stands in for Upstash: one store shared by every route. */
+class SharedStore extends MemoryStore {
+  readonly durable = true;
+}
+
 const ENV = ["LIVE_MODE", "LIVE_SESSIONS_PER_DAY", "LIVE_SESSIONS_PER_VISITOR_PER_DAY", "VISITOR_HASH_SALT", "ADMIN_TOKEN", "GNANI_API_KEY"];
 let saved: Record<string, string | undefined>;
 let clock: number;
@@ -119,10 +124,20 @@ describe("live session gate", () => {
 });
 
 describe("per-session caps", () => {
-  it("rejects requests without a claimed session", async () => {
+  it("rejects requests without a claimed session when the store is shared", async () => {
+    setStoreForTests(new SharedStore(() => clock));
     expect(await code(chargeSession(undefined, "turn"))).toBe("session_required");
     expect(await code(chargeSession("bad id", "turn"))).toBe("session_required");
     expect(await code(chargeSession("s_unclaimed1", "turn"))).toBe("session_required");
+  });
+
+  it("without a shared store, a call claimed on one instance still works on another (Vercel runs routes separately)", async () => {
+    const sessionInstance = new MemoryStore(() => clock);
+    setStoreForTests(sessionInstance);
+    await claimSession(req(), "s_split0001", clock);
+    setStoreForTests(new MemoryStore(() => clock)); // /api/turn on a different function
+    expect(await code(chargeSession("s_split0001", "turn"))).toBe("ok");
+    expect(await code(chargeSession("bad id", "turn"))).toBe("session_required");
   });
 
   it("caps requests and budgets per session", async () => {
@@ -157,7 +172,8 @@ describe("routes", () => {
     expect(body).toMatchObject({ live_available: false, live_reason: "paused" });
   });
 
-  it("paid routes answer 429 without a claimed session", async () => {
+  it("paid routes answer 429 without a claimed session when the store is shared", async () => {
+    setStoreForTests(new SharedStore(() => clock));
     const turn = (await import("@/app/api/turn/route")).POST;
     const tts = (await import("@/app/api/tts/route")).POST;
     const stream = (await import("@/app/api/tts/stream/route")).POST;
