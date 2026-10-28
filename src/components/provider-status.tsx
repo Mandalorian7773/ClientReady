@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStatus } from "@/lib/client/api";
-import type { PublicStatus } from "@/lib/server/env";
+import { getStatus, type AppStatus } from "@/lib/client/api";
 import { cn } from "./ui";
 
 export function useProviderStatus() {
-  const [status, setStatus] = useState<PublicStatus | null>(null);
+  const [status, setStatus] = useState<AppStatus | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -25,7 +24,7 @@ function Dot({ ok, demo }: { ok: boolean; demo?: boolean }) {
 }
 
 /** Live, honest view of which engines are wired up on this deployment. */
-export function ProviderStatus({ compact = false, status: given }: { compact?: boolean; status?: PublicStatus | null }) {
+export function ProviderStatus({ compact = false, status: given }: { compact?: boolean; status?: AppStatus | null }) {
   const { status: fetched, failed } = useProviderStatus();
   const status = given ?? fetched;
   if (failed) return <p className="text-xs text-fg-subtle">Provider status unavailable.</p>;

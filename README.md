@@ -121,7 +121,13 @@ See [`.env.example`](.env.example). All are server-side only. `/api/status` expo
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_CLIENT_MODEL`, `ANTHROPIC_COACH_MODEL` | Claude reasoning |
 | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_MODEL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_LABEL` | Self-hosted Evon or another compatible server |
 | `REASONING_PROVIDER` | Force `anthropic`, `gemini`, `openai-compatible` or `demo` |
-| `RATE_LIMIT_PER_MINUTE` | Per-IP, per-endpoint limit (default 30) |
+| `RATE_LIMIT_PER_MINUTE` | Per-IP, per-endpoint burst limit, in memory (default 30) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Durable counters for the limits below, shared across Vercel instances. Without them, counters are per instance and a warning is logged. |
+| `LIVE_SESSIONS_PER_VISITOR_PER_DAY` | Live calls per visitor per IST day (default 3). A visitor is a salted SHA-256 of the IP; raw IPs are never stored. |
+| `LIVE_SESSIONS_PER_DAY` | Live calls per IST day across everyone (default 60) |
+| `LIVE_MODE` | `off` pauses all live calls. The scripted sample call keeps working. |
+| `VISITOR_HASH_SALT` | Secret salt for the visitor hash |
+| `ADMIN_TOKEN` | Unlocks `GET /api/usage` via the `x-admin-token` header |
 
 ## Tests
 
@@ -156,6 +162,17 @@ Live results from 22 Oct 2026 (Gnani + Gemini keys):
 3. Deploy. API routes run on the Node.js runtime with `maxDuration` of 60 s (`/api/report`: 120 s; Hobby plans cap lower, so use a fast coach model there).
 
 Any Node host works: `npm run build && npm start`. The microphone requires **HTTPS** (or `localhost`).
+
+## Protecting API credits
+
+A public demo link can burn through credits, so every live call claims a slot first (`POST /api/session`):
+
+- **Per visitor:** `LIVE_SESSIONS_PER_VISITOR_PER_DAY` (default 3). **Global:** `LIVE_SESSIONS_PER_DAY` (default 60). Both roll over at midnight IST.
+- **Kill switch:** `LIVE_MODE=off`.
+- **Per-session caps.** Every paid route (`/api/stt`, `/api/tts`, `/api/tts/stream`, `/api/turn`, `/api/report`) checks that its session was claimed and stays within caps sized to the 10-minute call: 150 STT requests and 660 s of audio, 40 client turns, 80 streamed and 40 REST speech requests with 30,000 Timbre characters, and 4 reports. Without a claimed session the answer is a 429. A claimed session stays usable for 24 hours, so the report page can replay audio.
+- **Usage per IST day** (live sessions started, Prisma audio seconds, Timbre characters): `curl -H "x-admin-token: $ADMIN_TOKEN" https://client-readyyy.vercel.app/api/usage`. These are ClientReady's own counts, for comparison with the Gnani dashboard; the app calls no Gnani billing API.
+- `/api/status` includes `live_available` and `live_reason`. When live calls are unavailable, the call screen says why and offers the scripted sample call instead.
+- Counters live in Upstash Redis. If it isn't configured, or a request to it fails, they fall back to memory and the app keeps working.
 
 ## Security, privacy and cost controls
 

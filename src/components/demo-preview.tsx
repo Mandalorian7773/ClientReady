@@ -1,85 +1,108 @@
 "use client";
 
-import { useState } from "react";
-import { cn, Badge } from "./ui";
+import { useEffect, useRef, useState } from "react";
+import { cn } from "./ui";
+import { VoiceRing, type VoiceRingHandle } from "./voice-ring";
+
+type PreviewState = "client" | "user";
 
 /**
- * Illustrative, hand-written sample. Labelled as such in the UI: it is not a
- * recording of a live model or Gnani call.
+ * Landing-page preview of the call screen: the real voice ring, driven by a
+ * synthetic level (never the mic), cycling between the client speaking and
+ * your turn. Labelled as an illustrative sample. With reduced motion it holds
+ * still on one state.
  */
-const LINES: Array<{ who: "client" | "you"; text: string }> = [
-  { who: "client", text: "We miss maybe twenty, thirty calls a week after five. Why should I pay two thousand dollars for an AI to answer them?" },
-  { who: "you", text: "Our AI receptionist answers 24/7, books appointments and integrates with your calendar. It uses the latest voice AI." },
-  { who: "client", text: "That's a list of features. How do I know it actually brings in patients?" },
-];
-
 export function DemoPreview() {
   const [tab, setTab] = useState<"call" | "coach">("call");
+  const [state, setState] = useState<PreviewState>("client");
+  const ring = useRef<VoiceRingHandle>(null);
+
+  useEffect(() => {
+    if (tab !== "call") return;
+    const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let current: PreviewState = "client";
+    ring.current?.setMode("client");
+    setState("client");
+    const cycle = reduced
+      ? null
+      : setInterval(() => {
+          current = current === "client" ? "user" : "client";
+          ring.current?.setMode(current);
+          setState(current);
+        }, 4200);
+
+    // Synthetic speech envelope: syllable pulses under slower phrase swells.
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = (now - t0) / 1000;
+      if (reduced) ring.current?.setLevel(0.12);
+      else {
+        const syl = 0.5 + 0.5 * Math.sin(t * (current === "client" ? 24 : 27));
+        const phrase = 0.55 + 0.45 * Math.sin(t * 2.3) * Math.sin(t * 5.1 + 1);
+        ring.current?.setLevel(Math.max(0, Math.min(1, 0.18 + 0.6 * syl * phrase)));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (cycle) clearInterval(cycle);
+      cancelAnimationFrame(raf);
+    };
+  }, [tab]);
+
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface/90 shadow-2xl shadow-black/40">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-low/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-mid/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-good/70" />
+    <div className="rounded-sm border border-dotted border-rule bg-bg-raised/40">
+      <div className="rule-b flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <div role="tablist" aria-label="Preview" className="flex gap-4">
+          {(["call", "coach"] as const).map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={cn("label min-h-11 border-b transition-colors", tab === t ? "border-signal-strong text-fg" : "border-transparent text-fg-muted hover:text-fg")}
+            >
+              {t === "call" ? "The call" : "The coaching"}
+            </button>
+          ))}
         </div>
-        <Badge tone="neutral">Illustrative sample, not a live call</Badge>
-      </div>
-      <div role="tablist" aria-label="Preview" className="flex gap-1 px-4 pt-3">
-        {(["call", "coach"] as const).map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={cn("rounded-md px-3 py-1.5 text-sm transition-colors", tab === t ? "bg-surface-2 text-fg" : "text-fg-muted hover:text-fg")}
-          >
-            {t === "call" ? "The call" : "The coaching"}
-          </button>
-        ))}
+        <span className="label text-fg-muted">Illustrative sample, not a live call</span>
       </div>
 
       {tab === "call" ? (
-        <div className="space-y-3 p-4" role="tabpanel">
-          <div className="flex items-center gap-3 rounded-xl bg-bg-raised px-3 py-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-client/15 text-sm font-semibold text-client">SM</div>
-            <div className="text-sm">
-              <p className="font-medium">Dr. Sarah Mitchell</p>
-              <p className="text-fg-subtle">Clinic owner · Austin, US · sceptical</p>
-            </div>
-            <Badge tone="client" className="ml-auto">Speaking</Badge>
+        <div role="tabpanel">
+          <div className="relative h-72 sm:h-80">
+            <VoiceRing ref={ring} className="absolute inset-0 h-full w-full" />
+            <span className={cn("label absolute bottom-3 left-4", state === "client" ? "text-fg-muted" : "text-signal")} aria-live="polite">
+              {state === "client" ? "Client speaking" : "Your turn"}
+            </span>
           </div>
-          {LINES.map((l, i) => (
-            <div key={i} className={cn("rise flex", l.who === "you" && "justify-end")} style={{ animationDelay: `${i * 120}ms` }}>
-              <p
-                className={cn(
-                  "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                  l.who === "client" ? "rounded-tl-sm bg-surface-2 text-fg" : "rounded-tr-sm bg-signal/15 text-fg ring-1 ring-signal/30",
-                )}
-              >
-                {l.text}
-              </p>
-            </div>
-          ))}
+          <div className="rule-t flex items-baseline justify-between gap-3 px-4 py-3">
+            <span className="text-[15px] tracking-[-0.01em]">Dr. Sarah Mitchell · Clinic owner, Austin, US</span>
+            <span className="label text-fg-muted">No transcript</span>
+          </div>
         </div>
       ) : (
-        <div className="space-y-3 p-4 text-sm" role="tabpanel">
+        <div className="space-y-4 px-4 py-5 text-sm" role="tabpanel">
           <div className="flex items-baseline justify-between">
-            <p className="font-medium">Value proposition</p>
-            <span className="font-mono text-mid">42 / 100</span>
+            <span className="label">Value proposition</span>
+            <span className="tabular text-[28px] font-medium leading-none tracking-[-0.03em] text-low">42</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full w-[42%] rounded-full bg-mid" />
-          </div>
-          <blockquote className="border-l-2 border-low/60 pl-3 text-fg-muted">“…integrates with your calendar. It uses the latest voice AI.”</blockquote>
+          <span className="flex gap-1" aria-hidden>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <i key={n} className={cn("h-[3px] flex-1", n <= 2 ? "bg-accent-bright" : "bg-surface-2")} />
+            ))}
+          </span>
+          <p className="text-[17px] leading-snug tracking-[-0.01em]">“…integrates with your calendar. It uses the latest voice AI.”</p>
           <p className="text-fg-muted">
-            <span className="text-fg">Missing:</span> a result in <em>her</em> numbers. She told you about 20–30 missed calls a week.
+            <span className="text-fg">Missing:</span> a result in her numbers. She told you about 20 to 30 missed calls a week.
           </p>
-          <div className="rounded-xl border border-good/30 bg-good/5 p-3">
-            <p className="mb-1 text-xs uppercase tracking-wider text-good">Stronger answer</p>
-            <p className="leading-relaxed">
-              “If even five of those thirty missed calls are new patients, that&apos;s more than the setup fee in a month. I&apos;d show you
-              the exact number of after-hours bookings every week, so you can judge it yourself.”
+          <div className="rule-t pt-3">
+            <span className="label text-signal">Say this instead</span>
+            <p className="mt-1.5 leading-relaxed">
+              “If even five of those thirty missed calls are new patients, that&apos;s more than the setup fee in a month. I&apos;d show you the exact number of after-hours
+              bookings every week, so you can judge it yourself.”
             </p>
           </div>
           <p className="text-xs text-fg-subtle">Principle: Benefits over features (Rackham, SPIN Selling)</p>

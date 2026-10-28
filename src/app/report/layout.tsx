@@ -1,4 +1,4 @@
-export const metadata = { title: "Coaching report · ClientReady" };
+export const metadata = { title: "Report" };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;

@@ -7,6 +7,7 @@ import { ClientStateSchema, TurnSchema } from "@/lib/sim/types";
 import { generateCoachReport } from "@/lib/coach/generate";
 import { once } from "@/lib/server/idempotency";
 import { VoiceMetricsSchema } from "@/lib/voice/delivery";
+import { chargeSession } from "@/lib/server/live-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -24,6 +25,7 @@ export const POST = handler(
   "report",
   async (req) => {
     const body = Body.parse(await readJson(req));
+    await chargeSession(body.sessionId, "report");
     const reasoner = getReasoner();
     // A trailing client line (e.g. its goodbye) is not needed for scoring.
     const turns = body.turns.at(-1)?.role === "client" ? body.turns.slice(0, -1) : body.turns;

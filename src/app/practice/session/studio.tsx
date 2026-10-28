@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/components/ui";
+import { Wordmark } from "@/components/wordmark";
+import { offerPhrase } from "@/lib/scenario/copy";
 import { VoiceRing, type VoiceRingHandle } from "@/components/voice-ring";
 import { useProviderStatus } from "@/components/provider-status";
-import { ApiError, requestReport } from "@/lib/client/api";
+import { ApiError, claimLiveSession, requestReport } from "@/lib/client/api";
+import { liveBlockedMessage } from "@/lib/live-messages";
 import { newSessionId, saveSession } from "@/lib/client/storage";
 import type { CallEngine, CallMode } from "@/lib/client/voice/engine";
 import { LiveCall } from "@/lib/client/voice/live-call";
@@ -19,9 +22,10 @@ import type { ClientState } from "@/lib/sim/types";
 
 type Screen = "ready" | "call" | "debrief";
 
+/** "Dr. Sarah Mitchell" -> "Dr. Mitchell", joined by a non-breaking space so the title never wraps alone. */
 function shortName(name: string) {
   const parts = name.trim().split(/\s+/);
-  if (/^(dr|mr|ms|mrs|prof)\.?$/i.test(parts[0]) && parts.length > 1) return `${parts[0]} ${parts[parts.length - 1]}`;
+  if (/^(dr|mr|ms|mrs|prof)\.?$/i.test(parts[0]) && parts.length > 1) return `${parts[0]}\u00a0${parts[parts.length - 1]}`;
   return parts[0] || "The client";
 }
 
@@ -49,7 +53,7 @@ function Pill({ children, onClick, primary, pressed, disabled }: { children: Rea
       disabled={disabled}
       aria-pressed={pressed}
       className={cn(
-        "label rounded-full border transition-colors disabled:cursor-default disabled:opacity-40",
+        "label inline-flex min-h-11 items-center rounded-full border transition-colors disabled:cursor-default disabled:opacity-40",
         primary
           ? "border-fg bg-fg px-6 py-3.5 text-bg hover:border-signal-strong hover:bg-signal-strong"
           : pressed
@@ -69,6 +73,8 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
   const engine = useRef<CallEngine | null>(null);
   const sessionId = useRef(newSessionId());
   const skip = useRef(false);
+  const claimed = useRef<string | null>(null);
+  const used = useRef(false);
   const callStart = useRef(0);
 
   const [screen, setScreen] = useState<Screen>("ready");
@@ -83,9 +89,13 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
   const [seg, setSeg] = useState<{ i: number; n: number; label: string } | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [micBlocked, setMicBlocked] = useState(false);
+  /** Set when the server refused a live call (paused or daily limits). */
+  const [claimRefused, setClaimRefused] = useState<string | null>(null);
   const [debriefError, setDebriefError] = useState<string | null>(null);
 
   const who = shortName(scenario.client.name);
+  const blockedMessage =
+    sample || !status ? null : claimRefused ?? (!status.live_available && status.live_reason ? liveBlockedMessage(status.live_reason, status.per_visitor_limit) : null);
   const voiceless = !sample && status !== null && !status.tts.configured;
 
   // Ring level and call timer, every frame.
@@ -155,7 +165,20 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
     setHint(null);
     setTyping(false);
     setMuted(false);
-    sessionId.current = newSessionId();
+    // Reuse a claimed slot that never got a call going (e.g. the mic was blocked).
+    const reuse = !sample && claimed.current === sessionId.current && !used.current;
+    if (!reuse) sessionId.current = newSessionId();
+    used.current = false;
+    if (!sample && !reuse) {
+      try {
+        await claimLiveSession(sessionId.current);
+        claimed.current = sessionId.current;
+      } catch (err) {
+        if (err instanceof ApiError && err.code.startsWith("live_")) setClaimRefused(err.message);
+        else setStartError(err instanceof ApiError ? err.message : "The call couldn't start. Check your connection and try again.");
+        return;
+      }
+    }
     const e: CallEngine = sample
       ? new SampleCall()
       : new LiveCall({
@@ -167,6 +190,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
         });
     engine.current = e;
     e.on("mode", (m) => {
+      if (m === "client") used.current = true;
       setMode(m);
       if (m === "thinking") setSpeaking(null);
     });
@@ -229,7 +253,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
       <Ink>
         {scenario.client.name} runs {withArticle(scenario.client.businessType)}.
       </Ink>{" "}
-      Pitch {scenario.offer.name} out loud, then hear <Accent>what to fix.</Accent>
+      Pitch your {offerPhrase(scenario.offer.name) || "offer"} out loud, then hear <Accent>what to fix.</Accent>
     </>
   );
   let caption = sample ? "SAMPLE CALL" : "READY";
@@ -285,28 +309,25 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
   const navC = { ready: sample ? "SAMPLE CALL, SCRIPTED" : "MIC CHECK ON START", call: captions ? "CAPTIONS ON" : "NO TRANSCRIPT DURING THE CALL", debrief: "COACH SPEAKING" }[screen];
 
   return (
-    <main className="relative grid min-h-dvh grid-cols-1 bg-bg text-fg md:grid-cols-[34fr_14fr_52fr] md:grid-rows-[minmax(110px,18vh)_minmax(340px,1fr)_auto]">
+    <main className="relative grid min-h-dvh grid-cols-1 bg-bg text-fg md:grid-cols-[34fr_14fr_52fr] md:grid-rows-[minmax(72px,10vh)_minmax(260px,1fr)_auto]">
       {/* Dotted column rules */}
       <span aria-hidden className="rule-l pointer-events-none absolute inset-y-0 left-[34%] hidden md:block" />
       <span aria-hidden className="rule-l pointer-events-none absolute inset-y-0 left-[48%] hidden md:block" />
 
       {/* Top row */}
-      <div className="rule-b flex flex-col justify-between gap-4 px-4 py-4 md:col-start-1 md:row-start-1 md:px-[max(16px,1.3vw)]">
-        <Link href="/" className="text-[13px] font-medium tracking-[0.22em]" aria-label="ClientReady home">
-          CLIENTREADY
+      {/* Every first line in the top row sits in a 16px box aligned to its bottom, so the labels share one baseline. */}
+      <div className="rule-b flex flex-col justify-between gap-2 px-4 py-4 md:col-start-1 md:row-start-1 md:px-[max(16px,1.3vw)]">
+        <Link href="/" className="flex h-4 shrink-0 items-end" aria-label="ClientReady home">
+          <Wordmark />
         </Link>
-        <span className="label hidden md:block">
-          Practise the call
-          <br />
-          before it counts
-        </span>
+        <span className="label hidden shrink-0 leading-none md:block">Practise the call before it counts</span>
       </div>
       <div className="rule-b hidden px-[max(16px,1.3vw)] py-4 md:col-start-2 md:row-start-1 md:block">
-        <span className="label">{navB}</span>
+        <span className="label flex h-4 items-end leading-none">{navB}</span>
       </div>
       <div className="rule-b flex flex-wrap items-start justify-between gap-3 px-4 py-4 md:col-start-3 md:row-start-1 md:px-[max(16px,1.3vw)]">
-        <span className={cn("label", sample && "text-signal")}>{sample ? "SAMPLE CALL, SCRIPTED · BROWSER VOICE, NOT GNANI" : navC}</span>
-        <span className="label tabular" aria-live="off">
+        <span className={cn("label flex min-h-4 items-end leading-none", sample && "text-signal")}>{sample ? "SAMPLE CALL, SCRIPTED · BROWSER VOICE, NOT GNANI" : navC}</span>
+        <span className="label tabular flex h-4 items-end leading-none" aria-live="off">
           {screen === "ready" ? (
             <Link href="/practice/briefing" className="hover:text-signal">
               ← BRIEFING
@@ -439,13 +460,13 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
       </div>
 
       {/* Bottom row: display line + sentence */}
-      <div className="rule-b flex items-end px-4 pb-6 pt-8 md:col-span-2 md:col-start-1 md:row-start-3 md:border-b-0 md:px-[max(16px,1.3vw)] md:pt-9">
-        <h1 className="font-display text-[clamp(52px,7.2vw,124px)]" aria-live="polite">
+      <div className="rule-b flex items-end px-4 pb-5 pt-6 md:col-span-2 md:col-start-1 md:row-start-3 md:border-b-0 md:px-[max(16px,1.3vw)] md:pt-6">
+        <h1 className="font-display text-[clamp(44px,5.6vw,96px)]" aria-live="polite">
           {display}
         </h1>
       </div>
-      <div className="flex flex-col justify-end gap-5 px-4 pb-6 pt-6 md:col-start-3 md:row-start-3 md:px-[max(16px,1.3vw)] md:pt-9">
-        <p className="max-w-[30em] text-[clamp(19px,1.75vw,26px)] leading-[1.24] tracking-[-0.012em] text-fg-muted">{lede}</p>
+      <div className="flex flex-col justify-end gap-4 px-4 pb-5 pt-5 md:col-start-3 md:row-start-3 md:px-[max(16px,1.3vw)] md:pt-6">
+        <p className="max-w-[30em] text-[clamp(18px,1.6vw,24px)] leading-[1.24] tracking-[-0.012em] text-fg-muted">{lede}</p>
         {screen === "ready" && (
           <div className="flex flex-col items-start gap-3">
             {startError && (
@@ -453,12 +474,26 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
                 {startError}
               </p>
             )}
-            <div className="flex flex-wrap gap-2.5">
-              <Pill onClick={() => void start()} primary disabled={!sample && !status}>
-                {sample ? "Play the sample call" : "Start the call"}
-              </Pill>
-              {micBlocked && !sample && <Pill onClick={() => void start(true)}>Type my answers instead</Pill>}
-            </div>
+            {blockedMessage ? (
+              <>
+                <p role="status" className="max-w-[44ch] text-[15px] text-fg">
+                  {blockedMessage}
+                </p>
+                <Link
+                  href="/practice/session?sample"
+                  className="label inline-flex min-h-11 items-center rounded-full border border-fg bg-fg px-6 text-bg transition-colors hover:border-signal-strong hover:bg-signal-strong"
+                >
+                  Hear the sample call
+                </Link>
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-2.5">
+                <Pill onClick={() => void start()} primary disabled={!sample && !status}>
+                  {sample ? "Play the sample call" : "Start the call"}
+                </Pill>
+                {micBlocked && !sample && <Pill onClick={() => void start(true)}>Type my answers instead</Pill>}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -468,7 +503,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[96px_1fr] items-baseline gap-3 text-[17px] tracking-[-0.01em]">
+    <div className="grid grid-cols-[136px_1fr] items-baseline gap-3 text-[17px] tracking-[-0.01em]">
       <span className="label text-fg-muted">{label}</span>
       <span>{children}</span>
     </div>

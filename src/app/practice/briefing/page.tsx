@@ -9,7 +9,6 @@ import { ProviderStatus, useProviderStatus } from "@/components/provider-status"
 import { LevelMeter } from "@/components/level-meter";
 import { loadDraft } from "@/lib/client/storage";
 import { useRecorder, type Recording } from "@/lib/client/recorder";
-import { transcribe, ApiError } from "@/lib/client/api";
 import { getLanguage } from "@/lib/languages";
 import { LABELS, type Scenario } from "@/lib/scenario/schema";
 import { OBJECTIVES, TIPS } from "@/lib/scenario/objectives";
@@ -117,7 +116,7 @@ export default function BriefingPage() {
         </div>
 
         <aside className="grid content-start gap-6 lg:sticky lg:top-20">
-          <MicCheck languageId={s.learner.speechLanguage} languageLabel={lang.label} sttReady={!!status?.stt.configured} />
+          <MicCheck languageLabel={lang.label} />
           <Card className="p-5">
             <Eyebrow>Engines</Eyebrow>
             <div className="mt-3"><ProviderStatus status={status} /></div>
@@ -139,27 +138,11 @@ export default function BriefingPage() {
   );
 }
 
-function MicCheck({ languageId, languageLabel, sttReady }: { languageId: string; languageLabel: string; sttReady: boolean }) {
+/** A local mic check: it never sends audio anywhere, so it spends no credits. */
+function MicCheck({ languageLabel }: { languageLabel: string }) {
   const [rec, setRec] = useState<Recording | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [heard, setHeard] = useState<string | null>(null);
   const r = useRecorder({ maxSeconds: 6, onComplete: (x) => { setRec(x); setErr(null); }, onError: setErr });
-
-  async function testPrisma() {
-    if (!rec) return;
-    setTesting(true);
-    setHeard(null);
-    setErr(null);
-    try {
-      const out = await transcribe(rec.wav, languageId, []);
-      setHeard(out.transcript);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Transcription failed.");
-    } finally {
-      setTesting(false);
-    }
-  }
 
   return (
     <Card className="p-5">
@@ -177,14 +160,6 @@ function MicCheck({ languageId, languageLabel, sttReady }: { languageId: string;
       </div>
       {rec && r.state !== "recording" && (
         <p className="mt-3 text-sm text-good">Mic works: heard {rec.durationSec.toFixed(1)}s of audio.</p>
-      )}
-      {rec && sttReady && r.state !== "recording" && (
-        <Button variant="ghost" size="sm" className="mt-2 -ml-2" onClick={testPrisma} disabled={testing}>
-          {testing ? "Transcribing with Prisma…" : "Check transcription with Gnani Prisma (1 request)"}
-        </Button>
-      )}
-      {heard !== null && (
-        <p className="mt-2 rounded-lg bg-bg-raised px-3 py-2 text-sm"><span className="text-fg-subtle">Prisma heard:</span> “{heard}”</p>
       )}
       {err && <div className="mt-3"><Notice tone="warn">{err}</Notice></div>}
     </Card>

@@ -2,15 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { scenario, sampleTurns, toneWav } from "../helpers/fixtures";
 import { resetRateLimits } from "@/lib/server/rate-limit";
 import { clearIdempotency } from "@/lib/server/idempotency";
+import { MemoryStore, setStoreForTests } from "@/lib/server/counter-store";
+import { claimSession } from "@/lib/server/live-gate";
 
-const ENV_KEYS = ["GNANI_COACH_VOICE", "GNANI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "REASONING_PROVIDER", "OPENAI_COMPAT_BASE_URL", "OPENAI_COMPAT_MODEL", "RATE_LIMIT_PER_MINUTE"];
+/** A live session claimed in beforeEach; paid routes now require one. */
+const SID = "s_claimed0001";
+const CLAIMED = [SID, "s_test12345", "s_dup123456", "s_rate100000", "s_rate200000", "s_rate300000", "s_report1234"];
+
+const ENV_KEYS = ["LIVE_MODE", "LIVE_SESSIONS_PER_DAY", "LIVE_SESSIONS_PER_VISITOR_PER_DAY", "GNANI_COACH_VOICE", "GNANI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "REASONING_PROVIDER", "OPENAI_COMPAT_BASE_URL", "OPENAI_COMPAT_MODEL", "RATE_LIMIT_PER_MINUTE"];
 let saved: Record<string, string | undefined>;
 
-beforeEach(() => {
+beforeEach(async () => {
   saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   for (const k of ENV_KEYS) delete process.env[k];
   resetRateLimits();
   clearIdempotency();
+  setStoreForTests(new MemoryStore());
+  process.env.LIVE_SESSIONS_PER_VISITOR_PER_DAY = "100";
+  for (const id of CLAIMED) await claimSession(new Request("http://localhost/api/session"), id);
+  delete process.env.LIVE_SESSIONS_PER_VISITOR_PER_DAY;
 });
 afterEach(() => {
   for (const k of ENV_KEYS) {
@@ -26,13 +36,14 @@ describe("/api/status", () => {
   it("reports demo mode with no keys and never leaks secrets", async () => {
     process.env.GNANI_API_KEY = "gk_secret_value_123";
     const { GET } = await import("@/app/api/status/route");
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/status"));
     const text = await res.text();
     expect(text).not.toContain("gk_secret_value_123");
     const body = JSON.parse(text);
     expect(body.stt.configured).toBe(true);
     expect(body.reasoning.isDemo).toBe(true);
     expect(body.reasoning.label).toMatch(/not an LLM/);
+    expect(typeof body.live_available).toBe("boolean");
   });
 
   it("selects Anthropic when its key is present, OpenAI-compatible when configured", async () => {
@@ -92,6 +103,7 @@ describe("/api/stt and /api/tts without Gnani credentials", () => {
     const { POST } = await import("@/app/api/stt/route");
     const form = new FormData();
     form.append("audio", new Blob([toneWav(1.5) as BlobPart], { type: "audio/wav" }), "a.wav");
+    form.append("sessionId", SID);
     form.append("language", "en");
     const res = await POST(new Request("http://localhost/api/stt", { method: "POST", body: form }));
     expect(res.status).toBe(503);
@@ -104,6 +116,7 @@ describe("/api/stt and /api/tts without Gnani credentials", () => {
     const { POST } = await import("@/app/api/stt/route");
     const form = new FormData();
     form.append("audio", new Blob([new Uint8Array(100)], { type: "audio/webm" }), "a.webm");
+    form.append("sessionId", SID);
     form.append("language", "en");
     const res = await POST(new Request("http://localhost/api/stt", { method: "POST", body: form }));
     expect((await res.json()).error.code).toBe("bad_audio");
@@ -113,6 +126,7 @@ describe("/api/stt and /api/tts without Gnani credentials", () => {
     const { POST } = await import("@/app/api/stt/route");
     const form = new FormData();
     form.append("audio", new Blob([toneWav(1.5) as BlobPart], { type: "audio/wav" }), "a.wav");
+    form.append("sessionId", SID);
     form.append("language", "fr");
     expect((await POST(new Request("http://localhost/api/stt", { method: "POST", body: form }))).status).toBe(400);
   });
@@ -120,7 +134,7 @@ describe("/api/stt and /api/tts without Gnani credentials", () => {
   it("TTS validates input and reports missing configuration", async () => {
     const { POST } = await import("@/app/api/tts/route");
     expect((await POST(post("/api/tts", { text: "" }))).status).toBe(400);
-    const res = await POST(post("/api/tts", { text: "Hello", kind: "client" }));
+    const res = await POST(post("/api/tts", { text: "Hello", kind: "client", sessionId: SID }));
     expect(res.status).toBe(503);
     expect((await res.json()).error.code).toBe("not_configured");
   });
@@ -130,7 +144,7 @@ describe("/api/tts/stream", () => {
   it("validates input and reports missing configuration", async () => {
     const { POST } = await import("@/app/api/tts/stream/route");
     expect((await POST(post("/api/tts/stream", { text: "" }))).status).toBe(400);
-    const res = await POST(post("/api/tts/stream", { text: "Hello", kind: "coach" }));
+    const res = await POST(post("/api/tts/stream", { text: "Hello", kind: "coach", sessionId: SID }));
     expect(res.status).toBe(503);
     expect((await res.json()).error.code).toBe("not_configured");
   });
@@ -140,7 +154,7 @@ describe("/api/tts/stream", () => {
     const sse = 'event: chunk\ndata: {"audio":"AAA="}\n\nevent: complete\ndata: {"audio":""}\n\n';
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
     const { POST } = await import("@/app/api/tts/stream/route");
-    const res = await POST(post("/api/tts/stream", { text: "Here is your debrief.", kind: "coach", language: "en-IN" }));
+    const res = await POST(post("/api/tts/stream", { text: "Here is your debrief.", kind: "coach", language: "en-IN", sessionId: SID }));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("text/event-stream");
     expect(res.headers.get("X-Sample-Rate")).toBe("24000");
@@ -157,6 +171,7 @@ describe("/api/stt with a mocked Gnani backend", () => {
     const { POST } = await import("@/app/api/stt/route");
     const form = new FormData();
     form.append("audio", new Blob([toneWav(2) as BlobPart], { type: "audio/wav" }), "a.wav");
+    form.append("sessionId", SID);
     form.append("language", "hinglish");
     const res = await POST(new Request("http://localhost/api/stt", { method: "POST", body: form }));
     const body = await res.json();
@@ -170,6 +185,7 @@ describe("/api/stt with a mocked Gnani backend", () => {
     const { POST } = await import("@/app/api/stt/route");
     const form = new FormData();
     form.append("audio", new Blob([toneWav(2) as BlobPart], { type: "audio/wav" }), "a.wav");
+    form.append("sessionId", SID);
     form.append("language", "en");
     const res = await POST(new Request("http://localhost/api/stt", { method: "POST", body: form }));
     expect(res.status).toBe(422);

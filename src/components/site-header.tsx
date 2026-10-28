@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "./ui";
+import { Wordmark } from "./wordmark";
 
 const NAV = [
   { href: "/practice", label: "Practise" },
@@ -11,12 +12,7 @@ const NAV = [
 ];
 
 export function Logo() {
-  return (
-    <span className="flex items-center gap-2.5">
-      <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-accent-bright" />
-      <span className="text-[13px] font-medium tracking-[0.22em]">CLIENTREADY</span>
-    </span>
-  );
+  return <Wordmark />;
 }
 
 export function SiteHeader() {
@@ -25,7 +21,7 @@ export function SiteHeader() {
   return (
     <header className="no-print rule-b sticky top-0 z-40 bg-bg/90 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" aria-label="ClientReady home">
+        <Link href="/" aria-label="ClientReady home" className="inline-flex min-h-11 items-center">
           <Logo />
         </Link>
         <nav className="flex items-center gap-1">
@@ -34,9 +30,9 @@ export function SiteHeader() {
               key={n.href}
               href={n.href}
               className={cn(
-                "label px-2.5 py-1.5 transition-colors sm:px-3",
+                "label min-h-11 items-center px-2.5 transition-colors sm:px-3",
                 path === n.href ? "text-signal" : "text-fg-muted hover:text-fg",
-                n.href.startsWith("/#") && "hidden sm:inline",
+                n.href.startsWith("/#") ? "hidden sm:inline-flex" : "inline-flex",
               )}
             >
               {n.label}

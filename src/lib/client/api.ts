@@ -39,7 +39,14 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return (await res.json()) as T;
 }
 
-export async function getStatus(): Promise<PublicStatus> {
+/** Provider status plus whether a live call can start right now. */
+export type AppStatus = PublicStatus & {
+  live_available: boolean;
+  live_reason: "paused" | "daily_limit" | "visitor_limit" | null;
+  per_visitor_limit: number;
+};
+
+export async function getStatus(): Promise<AppStatus> {
   const res = await fetch("/api/status", { cache: "no-store" });
   if (!res.ok) throw await asError(res);
   return res.json();
@@ -73,8 +80,14 @@ export interface SttResponse {
   requestId?: string;
 }
 
-export async function transcribe(wav: Blob, language: string, bias: string[]): Promise<SttResponse> {
+/** Claims a live-call slot. Throws an ApiError (code live_*) when none is available. */
+export function claimLiveSession(sessionId: string) {
+  return post<{ ok: true }>("/api/session", { sessionId });
+}
+
+export async function transcribe(wav: Blob, language: string, bias: string[], sessionId: string): Promise<SttResponse> {
   const form = new FormData();
+  form.append("sessionId", sessionId);
   form.append("audio", wav, "utterance.wav");
   form.append("language", language);
   form.append("bias", JSON.stringify(bias.slice(0, 100)));
@@ -94,6 +107,7 @@ export async function synthesize(input: {
   gender?: "female" | "male";
   language?: string;
   seed?: number;
+  sessionId: string;
 }): Promise<{ url: string; voice: string | null }> {
   let res: Response;
   try {

@@ -4,13 +4,14 @@ import { handler } from "@/lib/server/route";
 import { validateUtteranceAudio } from "@/lib/audio/validate";
 import { AppError } from "@/lib/server/errors";
 import { getLanguage, LANGUAGE_IDS } from "@/lib/languages";
+import { addUsage, chargeSession } from "@/lib/server/live-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
  * POST multipart/form-data: audio (16 kHz mono PCM WAV), language (language id),
- * bias (optional JSON array of words to boost). Audio is held in memory only
+ * sessionId (a claimed live session), bias (optional JSON array of words to boost). Audio is held in memory only
  * for the duration of the request and never stored.
  */
 export const POST = handler("stt", async (req) => {
@@ -27,6 +28,7 @@ export const POST = handler("stt", async (req) => {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const info = validateUtteranceAudio(bytes, file.type);
+  await chargeSession(form.get("sessionId"), "stt", { budget: "sttSeconds", value: info.durationSec });
 
   let bias: string[] = [];
   const rawBias = form.get("bias");
@@ -41,6 +43,7 @@ export const POST = handler("stt", async (req) => {
 
   const lang = getLanguage(languageId);
   const stt = getTranscriber();
+  await addUsage("stt_seconds_x10", info.durationSec * 10);
   const { transcript, requestId } = await stt.transcribe({ audio: bytes, mimeType: "audio/wav", languageCode: lang.sttCode!, biasWords: bias });
   if (!transcript) {
     throw new AppError("empty_transcript", "Prisma could not hear any words. Try speaking a little closer to the microphone.", 422);

@@ -119,7 +119,7 @@ export class LiveCall extends Emitter implements CallEngine {
     const wav = new Blob([encodeWavFromInt16(seg.samples, 16_000) as BlobPart], { type: "audio/wav" });
     const s = this.opts.scenario;
     const bias = [s.offer.name, s.offer.description, s.client.name, s.client.industry].join(" ").split(/\s+/);
-    transcribe(wav, s.learner.speechLanguage, bias)
+    transcribe(wav, s.learner.speechLanguage, bias, this.opts.sessionId)
       .then((r) => {
         if (r.transcript.trim()) this.answer.push(r.transcript.trim());
       })
@@ -278,7 +278,7 @@ export class LiveCall extends Emitter implements CallEngine {
       };
       (async () => {
         try {
-          const body = { text: text.slice(0, 900), kind: who, gender: this.opts.scenario.client.voiceGender, seed: this.opts.scenario.client.name.length, language };
+          const body = { text: text.slice(0, 900), kind: who, gender: this.opts.scenario.client.voiceGender, seed: this.opts.scenario.client.name.length, language, sessionId: this.opts.sessionId };
           const res = await fetch("/api/tts/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ac.signal });
           if (!res.ok || !res.body) {
             const j = (await res.json().catch(() => null)) as { error?: { code: string; message: string } } | null;

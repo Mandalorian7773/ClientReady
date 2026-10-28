@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { ScenarioBuilder } from "./scenario-builder";
 
-export const metadata = { title: "Build your scenario · ClientReady" };
+export const metadata = { title: "Build your scenario" };
 
 export default function PracticePage() {
   return (

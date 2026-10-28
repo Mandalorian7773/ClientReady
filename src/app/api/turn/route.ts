@@ -6,6 +6,7 @@ import { ScenarioSchema } from "@/lib/scenario/schema";
 import { ClientStateSchema, TurnSchema } from "@/lib/sim/types";
 import { runClientTurn } from "@/lib/sim/engine";
 import { once } from "@/lib/server/idempotency";
+import { chargeSession } from "@/lib/server/live-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ const Body = z.object({
  */
 export const POST = handler("turn", async (req) => {
   const body = Body.parse(await readJson(req));
+  await chargeSession(body.sessionId, "turn");
   const reasoner = getReasoner();
   const key = `${body.sessionId}:${body.turns.length}:${body.turns.at(-1)?.text.length ?? 0}`;
   const { value, replayed } = once(key, () => runClientTurn(reasoner, body.scenario, body.turns, body.clientState));

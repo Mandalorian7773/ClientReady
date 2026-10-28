@@ -16,7 +16,7 @@ export default function Home() {
             Practise the client call <span className="text-signal-strong">before</span> the real one.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-fg-muted">
-            Speak to a realistic US, UK or Australian client who asks hard questions about your price, your scope and your AI. Then get coaching
+            Speak to a simulated US, UK or Australian client who asks hard questions about your price, your scope and your AI. Then get coaching
             that quotes what you actually said and shows you a stronger answer.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -80,6 +80,9 @@ export default function Home() {
             </li>
           ))}
         </ol>
+        <p className="mt-6 text-sm text-fg-muted">
+          The client&apos;s voice is Gnani Timbre English (India). Clients differ by what they ask and care about, not by accent.
+        </p>
       </section>
 
       {/* Features */}

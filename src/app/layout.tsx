@@ -6,10 +6,16 @@ import "./globals.css";
 const interTight = Inter_Tight({ variable: "--font-inter-tight", subsets: ["latin"], weight: ["400", "500", "600"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const TITLE = "ClientReady: practise client calls before the real one";
+const DESCRIPTION =
+  "Voice role-play with simulated international clients, then evidence-based coaching. Built for Indian freelancers, powered by Gnani Prisma and Timbre.";
+
 export const metadata: Metadata = {
-  title: "ClientReady: practise client calls before the real one",
-  description:
-    "Voice role-play with realistic international clients, then evidence-based coaching. Built for Indian freelancers, powered by Gnani Prisma and Timbre.",
+  metadataBase: new URL("https://client-readyyy.vercel.app"),
+  title: { default: TITLE, template: "%s · ClientReady" },
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/", siteName: "ClientReady", type: "website", locale: "en_IN" },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
 };
 
 export const viewport: Viewport = { themeColor: "#e8e1d6" };

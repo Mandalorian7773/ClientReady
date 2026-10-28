@@ -171,7 +171,7 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
             {coachLang.id !== "en" ? ` · explained in ${coachLang.label}` : ""}
           </p>
           <div className="no-print flex flex-wrap gap-2">
-            {report.spoken.length > 0 && <DebriefReplay report={report} sample={!!session.sample} ttsLanguage={coachLang.ttsCode ?? "en-IN"} />}
+            {report.spoken.length > 0 && <DebriefReplay report={report} sample={!!session.sample} ttsLanguage={coachLang.ttsCode ?? "en-IN"} sessionId={session.id} />}
             <Button variant="ghost" size="sm" onClick={copy}>
               {copied ? "Copied" : "Copy"}
             </Button>
@@ -233,7 +233,7 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
                     <div className="rule-t mt-3.5 pt-3">
                       <span className="label mb-1.5 block text-signal">Say this instead</span>
                       <q className="text-[17px]">{m.betterResponse}</q>
-                      <ListenButton text={m.betterResponse} sample={!!session.sample} />
+                      <ListenButton text={m.betterResponse} sample={!!session.sample} sessionId={session.id} />
                       <p className="mt-2 max-w-[62ch] text-sm text-fg-muted">{m.whyBetterWorks}</p>
                     </div>
                     <p className="mt-3 text-sm">
@@ -322,7 +322,7 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
               <div>
                 <span className="label text-good">Clearer English</span>
                 <p className="mt-1">{b.clearerEnglish}</p>
-                <ListenButton text={b.clearerEnglish} sample={!!session.sample} />
+                <ListenButton text={b.clearerEnglish} sample={!!session.sample} sessionId={session.id} />
               </div>
               {b.note && <p className="text-sm text-fg-muted md:col-span-2">{b.note}</p>}
             </div>
@@ -395,7 +395,7 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
 }
 
 /** Speaks text with Gnani Timbre (or the browser voice for the sample). */
-function useSpeech(sample: boolean) {
+function useSpeech(sample: boolean, sessionId: string) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const cache = useRef(new Map<string, string>());
   const stopRef = useRef(false);
@@ -416,7 +416,7 @@ function useSpeech(sample: boolean) {
     const key = `${language}:${text}`;
     let url = cache.current.get(key);
     if (!url) {
-      url = (await synthesize({ text: text.slice(0, 900), kind, language })).url;
+      url = (await synthesize({ text: text.slice(0, 900), kind, language, sessionId })).url;
       cache.current.set(key, url);
     }
     const a = audio.current ?? new Audio();
@@ -442,10 +442,10 @@ function useSpeech(sample: boolean) {
   return { say, stop, stopRef };
 }
 
-function ListenButton({ text, sample }: { text: string; sample: boolean }) {
+function ListenButton({ text, sample, sessionId }: { text: string; sample: boolean; sessionId: string }) {
   const [state, setState] = useState<"idle" | "loading" | "playing" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
-  const { say } = useSpeech(sample);
+  const { say } = useSpeech(sample, sessionId);
 
   async function go() {
     setState("loading");
@@ -470,10 +470,10 @@ function ListenButton({ text, sample }: { text: string; sample: boolean }) {
   );
 }
 
-function DebriefReplay({ report, sample, ttsLanguage }: { report: CoachReport; sample: boolean; ttsLanguage: string }) {
+function DebriefReplay({ report, sample, ttsLanguage, sessionId }: { report: CoachReport; sample: boolean; ttsLanguage: string; sessionId: string }) {
   const [playing, setPlaying] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const { say, stop, stopRef } = useSpeech(sample);
+  const { say, stop, stopRef } = useSpeech(sample, sessionId);
 
   async function play() {
     setPlaying(true);

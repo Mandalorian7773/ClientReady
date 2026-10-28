@@ -261,7 +261,7 @@ export function demoCoachReport(s: Scenario, dossier: PersonaDossier, turns: Tur
           ? "Questions that make the client describe the cost of the problem."
           : "A follow-up question about the impact or cost of the problem (an Implication question).",
       whyItMattered: `${s.client.name} needs to feel understood before hearing about ${s.offer.name}.`,
-      betterResponse: `Before I suggest anything, can I ask a couple of quick questions? Roughly how often does this problem happen in a typical week, and what does it cost you when it does — in time, lost customers or revenue?`,
+      betterResponse: `Before I suggest anything, can I ask a couple of quick questions? Roughly how often does this problem happen in a typical week, and what does it cost you when it does, in time, lost customers or revenue?`,
       whyBetterWorks: "It gets the client to state the impact in their own numbers, which you can use later to justify the price.",
       principleId: "spin",
       exercise: "Write three Problem and two Implication questions for this client and use them in your next session before mentioning your service.",

@@ -15,7 +15,11 @@ export type AppErrorCode =
   | "timeout"
   | "model_output_invalid"
   | "duplicate_turn"
-  | "session_limit";
+  | "session_limit"
+  | "session_required"
+  | "live_paused"
+  | "live_daily_limit"
+  | "live_visitor_limit";
 
 export class AppError extends Error {
   constructor(

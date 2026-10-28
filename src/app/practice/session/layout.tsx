@@ -1,4 +1,4 @@
-export const metadata = { title: "Roleplay studio · ClientReady" };
+export const metadata = { title: "Call" };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;
