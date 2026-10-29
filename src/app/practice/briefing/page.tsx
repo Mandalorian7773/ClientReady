@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Mic, Pencil, Square } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mic, Pencil, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import { useRecorder, type Recording } from "@/lib/client/recorder";
 import { getLanguage } from "@/lib/languages";
 import { LABELS, type Scenario } from "@/lib/scenario/schema";
 import { OBJECTIVES, TIPS } from "@/lib/scenario/objectives";
+import { getLevel, levelIdOf, levelIndex, PASS_SCORE, unitOf } from "@/lib/levels/path";
 
 export default function BriefingPage() {
   const router = useRouter();
@@ -35,15 +36,23 @@ export default function BriefingPage() {
   }
 
   const lang = getLanguage(s.learner.speechLanguage);
+  const levelId = levelIdOf(s);
+  const level = levelId ? getLevel(levelId) : undefined;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:py-14">
-      <Eyebrow>Pre-call briefing</Eyebrow>
+      <Eyebrow>{level ? `Unit ${unitOf(level.id)?.unitNumber} · Level ${levelIndex(level.id) + 1} · ${level.title}` : "Pre-call briefing"}</Eyebrow>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <h1 className="font-display text-4xl leading-tight sm:text-5xl">You&apos;re about to call {s.client.name.split(" ")[0] === "Dr." ? s.client.name : s.client.name.split(" ")[0]}.</h1>
-        <Link href="/practice" className="inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg">
-          <Pencil className="h-3.5 w-3.5" /> Edit scenario
-        </Link>
+        {level ? (
+          <Link href="/levels" className="inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg">
+            <ArrowLeft className="h-3.5 w-3.5" /> All levels
+          </Link>
+        ) : (
+          <Link href="/practice" className="inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg">
+            <Pencil className="h-3.5 w-3.5" /> Edit scenario
+          </Link>
+        )}
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -100,7 +109,8 @@ export default function BriefingPage() {
 
           <Card className="p-6">
             <Eyebrow>Your objective</Eyebrow>
-            <p className="mt-3 text-lg leading-snug">{OBJECTIVES[s.settings.focus]}</p>
+            <p className="mt-3 text-lg leading-snug">{level?.goal ?? OBJECTIVES[s.settings.focus]}</p>
+            {level && <p className="mt-2 text-sm text-fg-muted">Score {PASS_SCORE}+ to pass and unlock the next level. 70+ earns two stars, 85+ earns three.</p>}
             <ul className="mt-4 space-y-1.5 text-sm text-fg-muted">
               {TIPS[s.settings.focus].map((t) => (
                 <li key={t} className="flex gap-2"><span className="text-signal">→</span>{t}</li>

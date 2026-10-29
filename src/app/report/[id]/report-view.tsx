@@ -1,14 +1,20 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
-import { Button, ButtonLink, cn, Notice, Thinking } from "@/components/ui";
-import { ApiError, requestReport, synthesize } from "@/lib/client/api";
+import { ArrowRight, Flame, Languages, Lock, Unlock, Volume2, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Stars } from "@/components/stars";
+import { Button, ButtonLink, cn, Notice, Select, Thinking } from "@/components/ui";
+import { ApiError, requestExplanation, requestReport, synthesize } from "@/lib/client/api";
 import { saveDraft, saveSession, type SavedSession } from "@/lib/client/storage";
 import { reportToMarkdown } from "@/lib/coach/markdown";
 import { CATEGORIES, PRINCIPLES } from "@/lib/coach/rubric";
 import { scoreBand } from "@/lib/coach/score";
 import type { CoachReport } from "@/lib/coach/report";
-import { getLanguage } from "@/lib/languages";
+import { getLanguage, LANGUAGES } from "@/lib/languages";
+import type { Explanation } from "@/lib/coach/explain";
+import { getSessionResult, loadProgress } from "@/lib/client/progress";
+import { getLevel, levelIndex, levelScenario, PASS_SCORE, streak, type SessionResult } from "@/lib/levels/path";
 
 const OUTCOME_LABEL: Record<string, string> = {
   "deal-agreed": "Deal agreed",
@@ -73,7 +79,7 @@ export function ReportView({ session, onUpdate }: { session: SavedSession; onUpd
       </div>
     );
   }
-  return <Report session={session} report={session.report} />;
+  return <Report session={session} report={session.report} onUpdate={onUpdate} />;
 }
 
 /** Two-column section with a dotted rule, after the Optikka board. */
@@ -89,7 +95,7 @@ function Section({ label, title, children }: { label: string; title: string; chi
   );
 }
 
-function Report({ session, report }: { session: SavedSession; report: CoachReport }) {
+function Report({ session, report, onUpdate }: { session: SavedSession; report: CoachReport; onUpdate: (s: SavedSession) => void }) {
   const { scenario, turns } = session;
   const band = scoreBand(report.overall);
   const coachLang = getLanguage(scenario.learner.coachingLanguage);
@@ -184,6 +190,10 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
           </div>
         </div>
       </div>
+
+      {!session.sample && !report.isDemo && <ExplainPanel session={session} report={report} onUpdate={onUpdate} />}
+
+      {!session.sample && <LevelResult session={session} />}
 
       <Section label="Scores" title="How the call went">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3">
@@ -498,5 +508,169 @@ function DebriefReplay({ report, sample, ttsLanguage, sessionId }: { report: Coa
       </Button>
       {err && <span className="w-full text-xs text-low">{err}</span>}
     </>
+  );
+}
+
+/** Stars, XP and unlocks earned by this session, Duolingo-style. */
+function LevelResult({ session }: { session: SavedSession }) {
+  const router = useRouter();
+  const [result, setResult] = useState<SessionResult | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
+
+  useEffect(() => {
+    setResult(getSessionResult(session.id) ?? null);
+    setStreakDays(streak(loadProgress()).days);
+  }, [session.id, session.report]);
+
+  if (!result) return null;
+  const level = result.levelId ? getLevel(result.levelId) : undefined;
+  const next = result.unlocked ? getLevel(result.unlocked) : undefined;
+  const improved = result.stars > result.prevStars;
+
+  function go(scenario: SavedSession["scenario"]) {
+    saveDraft(scenario);
+    router.push("/practice/briefing");
+  }
+
+  return (
+    <section className="no-print rule-b px-4 py-6 md:px-[max(16px,1.3vw)]" aria-label="Level result">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          {level && <Stars value={result.stars} size="h-8 w-8" />}
+          <div>
+            <p className="text-lg font-medium">
+              {level
+                ? result.stars === 0
+                  ? `Level ${levelIndex(level.id) + 1} not passed yet`
+                  : improved
+                    ? result.prevStars === 0
+                      ? `Level ${levelIndex(level.id) + 1} passed!`
+                      : `New best on level ${levelIndex(level.id) + 1}!`
+                    : `Level ${levelIndex(level.id) + 1} complete`
+                : "Practice counted"}
+            </p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+              <span className="inline-flex items-center gap-1"><Zap className="h-4 w-4 text-mid" /> +{result.xp} XP</span>
+              {streakDays > 0 && <span className="inline-flex items-center gap-1"><Flame className="h-4 w-4 text-accent-bright" /> {streakDays}-day streak</span>}
+              {level && result.stars === 0 && <span className="inline-flex items-center gap-1"><Lock className="h-4 w-4" /> Score {PASS_SCORE}+ to unlock the next level</span>}
+              {next && <span className="inline-flex items-center gap-1 text-good"><Unlock className="h-4 w-4" /> Unlocked: {next.title}</span>}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {level && <Button variant="secondary" size="sm" onClick={() => go(levelScenario(level, loadProgress().langs))}>Retry level</Button>}
+          {next && (
+            <Button size="sm" onClick={() => go(levelScenario(next, loadProgress().langs))}>
+              Next level <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <ButtonLink href="/levels" variant={next ? "ghost" : "primary"} size="sm">All levels</ButtonLink>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Re-explain the summary and key fixes in another language (Hindi by default), with a spoken version. */
+function ExplainPanel({ session, report, onUpdate }: { session: SavedSession; report: CoachReport; onUpdate: (s: SavedSession) => void }) {
+  const coachId = session.scenario.learner.coachingLanguage;
+  const choices = LANGUAGES.filter((l) => l.id !== coachId);
+  const [lang, setLang] = useState(coachId === "hi" ? "en" : "hi");
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { say, stop, stopRef } = useSpeech(false, session.id);
+
+  const option = getLanguage(lang);
+  const label = option.id === "en" || option.id === "hinglish" ? option.label.replace(/ \(.*\)$/, "") : option.nativeLabel;
+  const explanation: Explanation | undefined = session.explanations?.[lang];
+
+  async function explain() {
+    setLoading(true);
+    setErr(null);
+    try {
+      const next = await requestExplanation({
+        sessionId: session.id,
+        languageId: lang,
+        clientName: session.scenario.client.name,
+        offerName: session.scenario.offer.name,
+        overall: report.overall,
+        summary: report.summary.slice(0, 1500),
+        issues: report.issues.slice(0, 6).map((i) => ({
+          title: i.title.slice(0, 200),
+          whatWasMissing: i.whatWasMissing.slice(0, 600),
+          whyItMattered: i.whyItMattered.slice(0, 600),
+          exercise: i.exercise.slice(0, 600),
+        })),
+        plan: report.plan.slice(0, 4).map((p) => ({ title: p.title.slice(0, 200), why: p.why.slice(0, 600), exercise: p.exercise.slice(0, 600) })),
+        nextDrill: report.nextDrill.slice(0, 600),
+      });
+      const updated = { ...session, explanations: { ...session.explanations, [lang]: next } };
+      saveSession(updated);
+      onUpdate(updated);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't explain the report.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function listen(text: string) {
+    setPlaying(true);
+    setErr(null);
+    stopRef.current = false;
+    try {
+      await say(text, "coach", option.ttsCode ?? "en-IN");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't play the explanation.");
+    } finally {
+      setPlaying(false);
+    }
+  }
+
+  return (
+    <Section label="In your language" title={explanation ? `Explained in ${label}` : "Want this explained in Hindi?"}>
+      <div className="no-print flex flex-col gap-3 px-4 py-5 sm:flex-row sm:items-end md:px-[max(16px,1.3vw)]">
+        <div className="sm:w-64">
+          <label htmlFor="explainLang" className="label text-fg-muted">Explain in</label>
+          <Select
+            id="explainLang"
+            value={lang}
+            options={choices.map((l) => ({ value: l.id, label: l.id === "en" || l.id === "hinglish" ? l.label : `${l.label} · ${l.nativeLabel}` }))}
+            onChange={(e) => { stop(); setLang(e.target.value); setErr(null); }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!explanation && (
+            <Button size="sm" onClick={explain} disabled={loading}>
+              {loading ? <Thinking label="Explaining…" /> : <><Languages className="h-3.5 w-3.5" /> Explain in {label}</>}
+            </Button>
+          )}
+          {explanation && option.ttsCode && (
+            <Button size="sm" onClick={playing ? stop : () => listen(explanation.spoken || explanation.summary)}>
+              <Volume2 className="h-3.5 w-3.5" /> {playing ? "Stop" : `Listen in ${label}`}
+            </Button>
+          )}
+        </div>
+      </div>
+      {err && <div className="px-4 pb-4 md:px-[max(16px,1.3vw)]"><Notice tone="error">{err}</Notice></div>}
+      {explanation && (
+        <div lang={lang === "hinglish" ? "hi-Latn" : lang} className="px-4 pb-6 md:px-[max(16px,1.3vw)]">
+          <p className="max-w-[46em] text-[17px] leading-relaxed">{explanation.summary}</p>
+          {explanation.points.length > 0 && (
+            <ol className="mt-5 grid gap-4 sm:grid-cols-2">
+              {explanation.points.map((p, i) => (
+                <li key={i} className="rounded-sm border border-dotted border-rule p-4">
+                  <p className="font-medium"><span className="mr-2 text-signal">{i + 1}.</span>{p.title}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">{p.explanation}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+          {explanation.nextStep && <p className="mt-5 text-sm"><span className="label mr-2 text-fg-subtle">Next</span>{explanation.nextStep}</p>}
+          <p className="mt-4 text-xs text-fg-subtle">Explained by {explanation.generatedBy}. Better answers stay in English, since that&apos;s what you&apos;ll say to the client.</p>
+        </div>
+      )}
+    </Section>
   );
 }

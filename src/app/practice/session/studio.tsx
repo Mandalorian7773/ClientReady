@@ -14,7 +14,7 @@ import { newSessionId, saveSession } from "@/lib/client/storage";
 import type { CallEngine, CallMode } from "@/lib/client/voice/engine";
 import { LiveCall } from "@/lib/client/voice/live-call";
 import { SampleCall } from "@/lib/client/voice/sample-call";
-import type { CoachReport } from "@/lib/coach/report";
+import { segmentMoment, type CoachReport, type SegmentMoment } from "@/lib/coach/report";
 import { getLanguage } from "@/lib/languages";
 import { buildSampleReport } from "@/lib/sample/sample-call";
 import type { Scenario } from "@/lib/scenario/schema";
@@ -86,7 +86,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
   const [hint, setHint] = useState<{ text: string; error?: boolean; retry?: () => void } | null>(null);
   const [typing, setTyping] = useState(false);
   const [typed, setTyped] = useState("");
-  const [seg, setSeg] = useState<{ i: number; n: number; label: string } | null>(null);
+  const [seg, setSeg] = useState<{ i: number; n: number; label: string; moment: SegmentMoment | null } | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [micBlocked, setMicBlocked] = useState(false);
   /** Set when the server refused a live call (paused or daily limits). */
@@ -151,7 +151,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
     if (canSpeak) {
       ring.current?.setMode("coach");
       for (let i = 0; i < report.spoken.length && !skip.current; i++) {
-        setSeg({ i, n: report.spoken.length, label: report.spoken[i].label });
+        setSeg({ i, n: report.spoken.length, label: report.spoken[i].label, moment: segmentMoment(report, report.spoken[i]) });
         await e.speakCoach(report.spoken[i].text, ttsLang);
         if (!skip.current) await new Promise((r) => setTimeout(r, 350));
       }
@@ -294,9 +294,17 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
       <>
         <Ink>The review didn&apos;t finish.</Ink> {debriefError}
       </>
-    ) : seg && seg.i > 0 ? (
+    ) : seg?.moment?.kind === "keep" ? (
+      <>
+        <Ink>On {seg.label.toLowerCase()}.</Ink> This part worked. <Accent>Keep doing it.</Accent>
+      </>
+    ) : seg?.moment?.better ? (
       <>
         <Ink>On {seg.label.toLowerCase()}.</Ink> Listen to the better version, then <Accent>say it back to yourself.</Accent>
+      </>
+    ) : seg && seg.i > 0 ? (
+      <>
+        <Ink>On {seg.label.toLowerCase()}.</Ink> Listen to the coach, then <Accent>read the full report.</Accent>
       </>
     ) : (
       <>
@@ -363,6 +371,7 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
                 </span>
               </Row>
             )}
+            {screen === "debrief" && seg?.moment && <MomentCard key={seg.i} moment={seg.moment} />}
 
             {captions && speaking && (
               <p className="rise rule-t pt-3 text-[17px] leading-snug tracking-[-0.01em]">
@@ -498,6 +507,33 @@ export function Studio({ scenario, sample }: { scenario: Scenario; sample: boole
         )}
       </div>
     </main>
+  );
+}
+
+/** The moment the coach is talking about: what you said and, for a fix, what to say instead. */
+function MomentCard({ moment }: { moment: SegmentMoment }) {
+  return (
+    <div className="rise rule-t flex flex-col gap-3 pt-3">
+      {moment.quote ? (
+        <div className="grid grid-cols-[136px_1fr] items-baseline gap-3">
+          <span className="label text-fg-muted">{moment.turn != null && moment.turn >= 0 ? `You said · turn ${moment.turn}` : "You said"}</span>
+          <q className={cn("text-[17px] leading-snug tracking-[-0.01em]", moment.kind === "keep" ? "text-good" : "text-fg")}>{moment.quote}</q>
+        </div>
+      ) : (
+        moment.kind === "fix" && (
+          <div className="grid grid-cols-[136px_1fr] items-baseline gap-3">
+            <span className="label text-fg-muted">You said</span>
+            <span className="text-[15px] text-fg-muted">Nothing on this yet. It was missing from the call.</span>
+          </div>
+        )
+      )}
+      {moment.better && (
+        <div className="grid grid-cols-[136px_1fr] items-baseline gap-3">
+          <span className="label text-signal">Try saying</span>
+          <q className="text-[17px] leading-snug tracking-[-0.01em]">{moment.better}</q>
+        </div>
+      )}
+    </div>
   );
 }
 

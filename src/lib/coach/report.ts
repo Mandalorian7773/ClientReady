@@ -130,6 +130,28 @@ export const DEBRIEF_CLOSING = "Your written report is on screen now.";
 const MAX_SEGMENTS = 9;
 const MAX_SEGMENT_CHARS = 700;
 
+/** What a spoken segment is about, for showing on screen while the coach talks. */
+export interface SegmentMoment {
+  kind: "fix" | "keep";
+  /** The learner's exact words (verified against the transcript), if the moment has a quote. */
+  quote: string | null;
+  turn: number | null;
+  /** For a fix: the stronger English answer to say back. */
+  better: string | null;
+}
+
+export function segmentMoment(report: Pick<CoachReport, "issues" | "strengths">, seg: SpokenSegment): SegmentMoment | null {
+  if (seg.ref?.type === "issue") {
+    const i = report.issues[seg.ref.index];
+    if (i) return { kind: "fix", quote: i.quote || spokenQuote(seg.text), turn: i.turn, better: i.betterResponse || null };
+  } else if (seg.ref?.type === "strength") {
+    const s = report.strengths[seg.ref.index];
+    if (s) return { kind: "keep", quote: s.quote || spokenQuote(seg.text), turn: s.turn, better: null };
+  }
+  const q = spokenQuote(seg.text);
+  return q ? { kind: "fix", quote: q, turn: null, better: null } : null;
+}
+
 /** Pull the quoted words out of "In this part you said, '...'" so they can be verified. */
 export function spokenQuote(text: string): string | null {
   const m = text.match(/you said,?\s*["'‘“]([^"“”]+?)["'’”](?=[\s.,;!?]|$)/i);

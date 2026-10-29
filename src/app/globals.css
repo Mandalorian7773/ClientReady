@@ -159,3 +159,53 @@ body {
   .no-print { display: none !important; }
   body { background: #fff; }
 }
+
+/*
+ * Selects: on browsers with customizable <select> (Chrome/Edge 135+) the
+ * dropdown list is drawn in the paper-and-ink theme instead of the OS list.
+ * Other browsers keep their native list, with the dotted-underline field.
+ */
+/* Unlayered on purpose: these must beat the global :focus-visible outline. */
+.themed-select {
+  appearance: none;
+}
+@supports (appearance: base-select) {
+  .themed-select,
+  .themed-select::picker(select) {
+    appearance: base-select;
+  }
+  .themed-select::picker-icon {
+    display: none; /* the field draws its own chevron */
+  }
+  .themed-select::picker(select) {
+    margin-top: 6px;
+    max-height: min(340px, 60vh);
+    padding: 6px 0;
+    border: 1px dotted var(--rule);
+    border-radius: 2px;
+    background: var(--bg-raised);
+    color: var(--fg);
+    box-shadow: 0 18px 40px -18px rgba(58, 48, 38, 0.45);
+  }
+  .themed-select option {
+    padding: 8px 16px;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    color: var(--fg-muted);
+    background: transparent;
+  }
+  .themed-select option::checkmark {
+    display: none;
+  }
+  .themed-select option:hover,
+  .themed-select option:focus-visible {
+    outline: none;
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+  .themed-select option:checked {
+    color: var(--signal);
+    font-weight: 500;
+    box-shadow: inset 2px 0 0 var(--signal-strong);
+  }
+}

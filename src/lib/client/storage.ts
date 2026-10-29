@@ -3,6 +3,8 @@
 import { parseScenario, safeParseScenario, type Scenario } from "@/lib/scenario/schema";
 import type { ClientState, Turn } from "@/lib/sim/types";
 import type { CoachReport } from "@/lib/coach/report";
+import type { Explanation } from "@/lib/coach/explain";
+import { recordSession } from "./progress";
 
 /**
  * Local-first persistence. Session history lives only in this browser's
@@ -24,6 +26,8 @@ export interface SavedSession {
   isDemo: boolean;
   /** The scripted sample call (not a real practice session). */
   sample?: boolean;
+  /** The report re-explained in other languages, keyed by language id. */
+  explanations?: Record<string, Explanation>;
 }
 
 function safeGet(key: string): string | null {
@@ -76,7 +80,9 @@ export function getSession(id: string): SavedSession | undefined {
 export function saveSession(session: SavedSession): boolean {
   const others = listSessions().filter((s) => s.id !== session.id);
   const next = [session, ...others].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_SESSIONS);
-  return safeSet(SESSIONS_KEY, JSON.stringify(next));
+  const ok = safeSet(SESSIONS_KEY, JSON.stringify(next));
+  recordSession(session);
+  return ok;
 }
 
 export function deleteSession(id: string) {

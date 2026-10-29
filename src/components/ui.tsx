@@ -71,7 +71,7 @@ export function Field({ label, hint, htmlFor, children, className }: { label: st
 
 // Optikka fields: no box, a dotted underline that turns orange on focus.
 const inputBase =
-  "w-full rounded-none border-0 border-b border-dotted border-fg-subtle bg-transparent px-0 text-[17px] tracking-[-0.01em] text-fg placeholder:text-fg-subtle/80 transition-colors focus:border-solid focus:border-signal-strong focus:outline-none";
+  "w-full rounded-none border-0 border-b border-dotted border-fg-subtle bg-transparent px-0 text-[17px] tracking-[-0.01em] text-fg placeholder:text-fg-subtle/80 transition-colors focus:border-solid focus:border-signal-strong focus:outline-none focus-visible:outline-none";
 
 export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={cn(inputBase, "h-10", props.className)} />;
@@ -83,7 +83,7 @@ export function Textarea(props: ComponentProps<"textarea">) {
 
 export function Select({ options, ...props }: ComponentProps<"select"> & { options: Array<{ value: string; label: string }> }) {
   return (
-    <select {...props} className={cn(inputBase, "h-10 appearance-none bg-[length:12px] bg-[right_12px_center] bg-no-repeat pr-8", props.className)}
+    <select {...props} className={cn(inputBase, "themed-select h-10 bg-[length:12px] bg-[right_12px_center] bg-no-repeat pr-8", props.className)}
       style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%236e7586' fill='none' stroke-width='1.5'/%3E%3C/svg%3E\")" }}>
       {options.map((o) => (
         <option key={o.value} value={o.value}>

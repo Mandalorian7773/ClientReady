@@ -6,6 +6,7 @@ import { cn } from "./ui";
 import { Wordmark } from "./wordmark";
 
 const NAV = [
+  { href: "/levels", label: "Levels" },
   { href: "/practice", label: "Practise" },
   { href: "/history", label: "History" },
   { href: "/#how-it-works", label: "How it works" },
