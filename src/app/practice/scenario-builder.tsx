@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, cn, Eyebrow, Field, Input, Segmented, Select, Textarea } from "@/components/ui";
 import { loadDraft, saveDraft } from "@/lib/client/storage";
 import { LANGUAGES, getLanguage } from "@/lib/languages";
+import { levelIdOf } from "@/lib/levels/path";
 import { DEFAULT_SCENARIO, getPreset, PRESETS } from "@/lib/scenario/presets";
 import {
   COMPANY_SIZES,
@@ -49,7 +50,8 @@ export function ScenarioBuilder() {
   }, [params]);
 
   function patch<K extends keyof Scenario>(section: K, values: Partial<Scenario[K]>) {
-    setS((prev) => ({ ...prev, [section]: { ...(prev[section] as object), ...values } }) as Scenario);
+    // Editing a level turns it into a custom scenario, so it can't earn that level's stars.
+    setS((prev) => ({ ...prev, ...(levelIdOf(prev) ? { id: "custom", title: "Custom scenario" } : {}), [section]: { ...(prev[section] as object), ...values } }) as Scenario);
   }
 
   function choosePreset(id: string) {

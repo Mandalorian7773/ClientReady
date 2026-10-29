@@ -23,7 +23,10 @@ export default function Home() {
             <ButtonLink href="/practice" size="lg">
               Start practising <ArrowRight className="h-4 w-4" />
             </ButtonLink>
-            <ButtonLink href="/practice/session?sample" size="lg" variant="secondary">
+            <ButtonLink href="/levels" size="lg" variant="secondary">
+              Climb the levels
+            </ButtonLink>
+            <ButtonLink href="/practice/session?sample" size="lg" variant="ghost">
               Hear a sample call
             </ButtonLink>
           </div>

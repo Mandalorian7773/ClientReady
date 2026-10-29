@@ -1,6 +1,9 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { ArrowRight, Flame, Lock, Unlock, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Stars } from "@/components/stars";
 import { Button, ButtonLink, cn, Notice, Thinking } from "@/components/ui";
 import { ApiError, requestReport, synthesize } from "@/lib/client/api";
 import { saveDraft, saveSession, type SavedSession } from "@/lib/client/storage";
@@ -9,6 +12,8 @@ import { CATEGORIES, PRINCIPLES } from "@/lib/coach/rubric";
 import { scoreBand } from "@/lib/coach/score";
 import type { CoachReport } from "@/lib/coach/report";
 import { getLanguage } from "@/lib/languages";
+import { getSessionResult, loadProgress } from "@/lib/client/progress";
+import { getLevel, levelIndex, levelScenario, PASS_SCORE, streak, type SessionResult } from "@/lib/levels/path";
 
 const OUTCOME_LABEL: Record<string, string> = {
   "deal-agreed": "Deal agreed",
@@ -184,6 +189,8 @@ function Report({ session, report }: { session: SavedSession; report: CoachRepor
           </div>
         </div>
       </div>
+
+      {!session.sample && <LevelResult session={session} />}
 
       <Section label="Scores" title="How the call went">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3">
@@ -498,5 +505,65 @@ function DebriefReplay({ report, sample, ttsLanguage, sessionId }: { report: Coa
       </Button>
       {err && <span className="w-full text-xs text-low">{err}</span>}
     </>
+  );
+}
+
+/** Stars, XP and unlocks earned by this session, Duolingo-style. */
+function LevelResult({ session }: { session: SavedSession }) {
+  const router = useRouter();
+  const [result, setResult] = useState<SessionResult | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
+
+  useEffect(() => {
+    setResult(getSessionResult(session.id) ?? null);
+    setStreakDays(streak(loadProgress()).days);
+  }, [session.id, session.report]);
+
+  if (!result) return null;
+  const level = result.levelId ? getLevel(result.levelId) : undefined;
+  const next = result.unlocked ? getLevel(result.unlocked) : undefined;
+  const improved = result.stars > result.prevStars;
+
+  function go(scenario: SavedSession["scenario"]) {
+    saveDraft(scenario);
+    router.push("/practice/briefing");
+  }
+
+  return (
+    <section className="no-print rule-b px-4 py-6 md:px-[max(16px,1.3vw)]" aria-label="Level result">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          {level && <Stars value={result.stars} size="h-8 w-8" />}
+          <div>
+            <p className="text-lg font-medium">
+              {level
+                ? result.stars === 0
+                  ? `Level ${levelIndex(level.id) + 1} not passed yet`
+                  : improved
+                    ? result.prevStars === 0
+                      ? `Level ${levelIndex(level.id) + 1} passed!`
+                      : `New best on level ${levelIndex(level.id) + 1}!`
+                    : `Level ${levelIndex(level.id) + 1} complete`
+                : "Practice counted"}
+            </p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+              <span className="inline-flex items-center gap-1"><Zap className="h-4 w-4 text-mid" /> +{result.xp} XP</span>
+              {streakDays > 0 && <span className="inline-flex items-center gap-1"><Flame className="h-4 w-4 text-accent-bright" /> {streakDays}-day streak</span>}
+              {level && result.stars === 0 && <span className="inline-flex items-center gap-1"><Lock className="h-4 w-4" /> Score {PASS_SCORE}+ to unlock the next level</span>}
+              {next && <span className="inline-flex items-center gap-1 text-good"><Unlock className="h-4 w-4" /> Unlocked: {next.title}</span>}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {level && <Button variant="secondary" size="sm" onClick={() => go(levelScenario(level, loadProgress().langs))}>Retry level</Button>}
+          {next && (
+            <Button size="sm" onClick={() => go(levelScenario(next, loadProgress().langs))}>
+              Next level <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <ButtonLink href="/levels" variant={next ? "ghost" : "primary"} size="sm">All levels</ButtonLink>
+        </div>
+      </div>
+    </section>
   );
 }
