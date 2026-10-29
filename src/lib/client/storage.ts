@@ -3,6 +3,7 @@
 import { parseScenario, safeParseScenario, type Scenario } from "@/lib/scenario/schema";
 import type { ClientState, Turn } from "@/lib/sim/types";
 import type { CoachReport } from "@/lib/coach/report";
+import type { Explanation } from "@/lib/coach/explain";
 import { recordSession } from "./progress";
 
 /**
@@ -25,6 +26,8 @@ export interface SavedSession {
   isDemo: boolean;
   /** The scripted sample call (not a real practice session). */
   sample?: boolean;
+  /** The report re-explained in other languages, keyed by language id. */
+  explanations?: Record<string, Explanation>;
 }
 
 function safeGet(key: string): string | null {

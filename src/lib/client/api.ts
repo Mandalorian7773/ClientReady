@@ -3,6 +3,7 @@
 import type { Scenario } from "@/lib/scenario/schema";
 import type { ClientState, Turn } from "@/lib/sim/types";
 import type { CoachReport } from "@/lib/coach/report";
+import type { ExplainInput, Explanation } from "@/lib/coach/explain";
 import type { PublicStatus } from "@/lib/server/env";
 import type { VoiceMetrics } from "@/lib/voice/delivery";
 
@@ -70,6 +71,10 @@ export function requestClientTurn(
 
 export function requestReport(payload: { sessionId: string; scenario: Scenario; turns: Turn[]; clientState: ClientState; voice?: VoiceMetrics | null }) {
   return post<CoachReport>("/api/report", payload);
+}
+
+export function requestExplanation(payload: ExplainInput & { sessionId: string }) {
+  return post<Explanation>("/api/explain", payload);
 }
 
 export interface SttResponse {
