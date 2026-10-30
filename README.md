@@ -169,10 +169,10 @@ A public demo link can burn through credits, so every live call claims a slot fi
 
 - **Per visitor:** `LIVE_SESSIONS_PER_VISITOR_PER_DAY` (default 3). **Global:** `LIVE_SESSIONS_PER_DAY` (default 60). Both roll over at midnight IST.
 - **Kill switch:** `LIVE_MODE=off`.
-- **Per-session caps.** Every paid route (`/api/stt`, `/api/tts`, `/api/tts/stream`, `/api/turn`, `/api/report`) checks that its session was claimed and stays within caps sized to the 10-minute call: 150 STT requests and 660 s of audio, 40 client turns, 80 streamed and 40 REST speech requests with 30,000 Timbre characters, and 4 reports. Without a claimed session the answer is a 429. A claimed session stays usable for 24 hours, so the report page can replay audio.
+- **Per-session caps.** Every paid route (`/api/stt`, `/api/tts`, `/api/tts/stream`, `/api/turn`, `/api/report`) checks that its session was claimed and stays within caps sized to the 10-minute call: 150 STT requests and 660 s of audio, 40 client turns, 80 streamed and 40 REST speech requests with 30,000 Timbre characters, and 4 reports. With Upstash configured, a request for a session that was never claimed gets a 429. A claimed session stays usable for 24 hours, so the report page can replay audio.
 - **Usage per IST day** (live sessions started, Prisma audio seconds, Timbre characters): `curl -H "x-admin-token: $ADMIN_TOKEN" https://client-readyyy.vercel.app/api/usage`. These are ClientReady's own counts, for comparison with the Gnani dashboard; the app calls no Gnani billing API.
 - `/api/status` includes `live_available` and `live_reason`. When live calls are unavailable, the call screen says why and offers the scripted sample call instead.
-- Counters live in Upstash Redis. If it isn't configured, or a request to it fails, they fall back to memory and the app keeps working.
+- Counters live in Upstash Redis. If it isn't configured, or a request to it fails, they fall back to memory and the app keeps working. Memory isn't shared between Vercel's functions, so without Upstash the "was this session claimed?" check is skipped (it would otherwise refuse every call), and the caps and daily limits are counted per instance. Set up Upstash before sharing the link publicly.
 
 ## Security, privacy and cost controls
 
